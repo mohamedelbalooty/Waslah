@@ -1,4 +1,4 @@
-# Waslah — AI Revenue Guardian
+﻿# Waslah — AI Revenue Guardian
 ## Software Requirements Specification — V2
 ### Version 2.1 | August 2026
 
@@ -12,6 +12,7 @@
 |---|---|
 | **Purpose** | Consolidated, implementation-ready requirements for **V2** ("Wasel + Aaed + Hafeth"), including the MVP foundations V2 depends on |
 | **Base documents** | Waslah SRS v2.0 (Aug 2026) · Waslah Feature List |
+| **Companion docs** | `Waslah_Market_Sizing.md` (TAM/SAM/SOM) · `Waslah_Competitive_Analysis.md` (differentiation) · `Waslah_Financial_Model.md` (unit economics + funding) |
 | **V2 identity** | Months 4–8. "Natural expansion from sales to recovery to margin." (SRS §08) |
 | **Decisions baked in** | All resolved business decisions (RES-xx), resolved risks, resolved open questions, new functional requirements (NEW-FR-xx), state machines, RBAC matrix, assumptions, and remaining stakeholder-owned questions |
 | **Compliance rule** | Where this document differs from the base SRS, **this document wins**. Every intentional change is cross-referenced to its decision ID |
@@ -29,7 +30,7 @@
 | Margin | **Hafeth** — Margin Guard basic rules engine + exception approval workflow | SRS §08 |
 | Multi-user | Owner/Admin/Manager/Agent/Accountant/Viewer RBAC, invites, conversation assignment & ownership | SRS §08 |
 | CRM | Basic CRM — customer profiles, conversation history, order history, notes, auto-segments | SRS §08 |
-| E-commerce | **Salla** and **Zid** integration | SRS §08 |
+| E-commerce | **Salla** and **Zid** integration + **Salla App Store listing** (distribution channel — see Competitive Analysis §2.6: "pursue partnership NOW") | SRS §08 |
 | Media | Voice note transcription · image recognition (customer sends product photo) | SRS §08 |
 | Billing | Automated invoicing, revenue-share fee engine, trial, overage policy, dispute hold | Feature List §7 |
 | Analytics | Revenue by agent/channel/product/segment; margin dashboard; full conversational metrics | Feature List §6 |
@@ -88,7 +89,7 @@ Events (publish on state change): MessageReceived · ConversationAssigned · Con
 | Language/Runtime | TypeScript / Node.js ≥20 |
 | Data store | PostgreSQL (Prisma ORM), JSONB for flexible config |
 | Queues | BullMQ on Redis |
-| API | REST `/api/v1`; JSON schema validated; OAuth2+JWT |
+| API | REST `https://api.waslah.ai/v1`; path convention `api.waslah.ai/v1/<resource>` (no `/api/` prefix -- subdomain makes it redundant); JSON schema validated; OAuth2+JWT |
 | Money | Decimal(14,2); see DECISION RES-08 |
 | AI | Provider abstraction (`openai` \| `anthropic` \| `mock`), cost-metered, logged |
 
@@ -217,7 +218,91 @@ See §10 (Actors, Roles & Permissions). Includes **Viewer** definition, owner-on
 
 ---
 
-## 06 Risks — Resolved
+
+## 06 Market & Competitive Context
+
+> Derived from `Waslah_Market_Sizing.md`, `Waslah_Competitive_Analysis.md`, and `Waslah_Financial_Model.md`. Read those documents for full methodology and scenario analysis. This section surfaces the business context that shapes product scope, build priority, and non-functional targets.
+
+---
+
+### 06.1 Market Sizing Summary
+
+| Level | Merchants | ARR (Base Case) |
+|---|---|---|
+| TAM (Egypt + KSA, WhatsApp-active SMEs) | ~470,000 | ~$310M |
+| SAM (qualified: >=200 conv/month, >=$5K GMV, Salla/Zid/Shopify/Woo integration) | ~37,600 | ~$75M |
+| SOM Year 1 (Egypt-first, founder-led) | ~138 | ~$136K ARR |
+| SOM Year 2 (V2 live, KSA entry, partners) | ~650 | ~$1.25M ARR |
+| SOM Year 3 (V2 mature, Gulf expansion) | ~1,700 | ~$4.2M ARR |
+
+**ICP definition (Ideal Customer Profile for V1/V2 targeting):** MENA e-commerce merchant with (a) >=200 WhatsApp conversations/month, (b) >=USD$5,000/month GMV, (c) active on Shopify, WooCommerce, Salla, or Zid, (d) operating in Egypt (Cairo/Alexandria) or KSA (Riyadh/Jeddah) — this is the SAM segment where Waslah's ROI case is immediately demonstrable.
+
+---
+
+### 06.2 Competitive Positioning
+
+**Positioning statement:**
+> For MENA e-commerce merchants who sell primarily through WhatsApp and lose revenue to slow responses, abandoned conversations, and margin-eroding discounts -- Waslah is the AI Revenue Guardian that closes sales, recovers abandonment, and protects margin autonomously in Arabic, so merchants only pay a success fee when revenue is actually recovered. Unlike WATI, Zoko, or Trengo, Waslah is the only platform built end-to-end for Arabic-first WhatsApp commerce with a financial outcome model, not just a messaging tool.
+
+**Unique position:** Waslah is the only platform at the intersection of (1) MENA-native Arabic AI, (2) autonomous sales closure, and (3) revenue attribution with a success-fee model. No single competitor occupies all three dimensions (see `Waslah_Competitive_Analysis.md` §3).
+
+**Primary differentiation (rank-ordered by competitive durability):**
+
+| Differentiator | Durability | What makes it hard to copy |
+|---|---|---|
+| Revenue attribution data flywheel | High | Immutable `AttributionEvent` ledger + attribution model improves with merchant volume |
+| Arabic AI quality (dialect, context) | Medium-High | Ongoing training data investment; 12-18 months for a well-funded competitor to match |
+| MENA payment + e-commerce integrations (Salla/Zid/Fawry/Mada) | Medium | Integration work is imitable; first-mover + App Store relationships help |
+| Success-fee alignment model | Medium | Requires billing infrastructure + financial ops; model is copyable but not trivially |
+| Margin Guard deterministic engine | Low-Medium | 3-6 months for a competitor to replicate; needs to ship first and fast |
+
+---
+
+### 06.3 Competitive Risk Register (Product-Impacting)
+
+> These risks from `Waslah_Competitive_Analysis.md` §5 affect build priority decisions. They are PRODUCT risks, not just GTM risks.
+
+| Risk | Timeline | Product Mitigation |
+|---|---|---|
+| WATI launches Arabic LLM agent | 12-18 months | Ship Wasel + attribution before WATI can; deepen margin + attribution moat they cannot copy fast |
+| Salla builds native AI features | 18-24 months | **Pursue Salla App Store listing in V2** as partnership-first play; be the preferred AI layer on Salla, not a competitor (see §02.1) |
+| Meta launches WhatsApp native AI for Business | 24+ months | Macro category risk; first-mover merchant relationships + data flywheel are the hedge; accelerate MAR proof points |
+| Regional funded competitor emerges | Variable | Speed + brand + data flywheel; raise before they do. Financial Model §7 shows path to $1.25M ARR before needing Series A |
+
+---
+
+### 06.4 Financial Milestones Tied to Product Phases
+
+| Phase | Product Gate | Financial Target | Funding Round |
+|---|---|---|---|
+| MVP (Months 1-3) | Wasel + WhatsApp + payment links + attribution | 138 merchants, $136K ARR | Pre-seed/bootstrap |
+| V2 (Months 4-8) | Aaed + Hafeth + Salla/Zid + multi-user | 650 merchants, $1.25M ARR | Seed ($1.5M-$3M) |
+| V2 Mature (Months 9-12+) | Full billing automation + KSA + agency partners | 1,700 merchants, $4.2M ARR, EBITDA+ | Series A ($6M-$10M) |
+
+**Key unit economics targets (from Financial Model §4 + §9):**
+
+| Metric | Target | Why it matters for product |
+|---|---|---|
+| AI cost / conversation | <$0.05 | COGS constraint on LLM provider choice and prompt optimization |
+| Monthly churn | <3.5% (Y1) / <2.5% (Y3) | Product quality/stickiness gate; drives NRR target |
+| Net Revenue Retention (NRR) | >=108% (Y2) / >=115% (Y3) | Success fee growing with merchant GMV -- requires attribution to be trusted |
+| LTV:CAC | >=8x | Justifies partner channel investment (Salla App Store, agency program) |
+| CAC payback | <3.5 months | Fast payback enabled by low blended CAC via partner channels |
+
+---
+
+### 06.5 ICP Win Signals (inform onboarding + AI configuration defaults)
+
+Merchants entering the Waslah funnel who exhibit these signals are in the ICP and should be prioritized for pilots:
+- **Abandoned conversations**: merchant mentions >10 daily unresponded WhatsApp messages
+- **Manual overload**: >2 hrs/day spent on WhatsApp responses by owner or staff
+- **Bad discount history**: lost a sale or had margin pressure from informal discounts
+- **COD rejection rate**: >10% COD rejections (Hafeth + shipping webhook impact is immediate)
+- **WATI/Zoko users**: counter with "AI closes the sale, not just routes the message"
+
+These signals also inform Wasel's default confidence threshold calibration and Aaed's abandonment detection window during onboarding.
+
+## 07 Risks — Resolved
 
 | Risk (base SRS) | V2 mitigation | Decision ref |
 |---|---|---|
@@ -232,9 +317,12 @@ See §10 (Actors, Roles & Permissions). Includes **Viewer** definition, owner-on
 
 ---
 
-## 07 New Functional Requirements (V2)
+## 08 New Functional Requirements (V2)
 
 > Numbered `NEW-FR-xxx` to avoid collision with base-SRS FR-001..015. All are testable.
+
+
+**NEW-BR-001 — AI cost cap.** AI processing cost per conversation SHALL NOT exceed $0.05 blended across all LLM calls in a single conversation context (voice transcription, image recognition, response generation, summarization). This is a financial constraint from the unit economics model (Financial Model §5, A-F-02). The `LLMCall` table logs cost per call; the billing job aggregates per-conversation cost and alerts when workspace average exceeds $0.04 (80% threshold). Violations trigger a model downgrade or truncation before any response is sent. *(Derived from NEW-NFR-004 observability + Financial Model §9 AI Cost <$0.05 target.)*
 
 **NEW-FR-010 — Attribution record.** The system SHALL persist an immutable attribution event for every order–conversation link containing: workspace, order, conversation, attributed amount, type (`AI_FULL | SPLIT | HUMAN | FOLLOWUP`), model (`first_touch | split | conservative`), status (`ACTIVE | REVERSED`), reversal reason, timestamps. Attribution SHALL be reversible only via refund or dispute resolution; each SHALL create a reversal event. *(Acceptance: 100% of paid orders have ≥1 attribution event; reversal correctness verified for refunds and disputes.)*
 
@@ -294,7 +382,7 @@ Base-SRS NFRs (§13) continue to apply unchanged except: **2FA → V2** (RES-10)
 
 ---
 
-## 09 Domain Entities & State Machines
+## 10 Domain Entities & State Machines
 
 ### 09.1 Entity catalog (V2 additions highlighted)
 
@@ -332,7 +420,7 @@ MVP entities (User, Workspace, WorkspaceUser, Session, Product, ProductVariant, 
 
 ---
 
-## 10 Actors, Roles & Permissions (V2 — RES-19)
+## 11 Actors, Roles & Permissions (V2 — RES-19)
 
 | Capability | Owner | Admin | Manager | Agent | Accountant | Viewer |
 |---|---|---|---|---|---|---|
@@ -396,7 +484,7 @@ MVP entities (User, Workspace, WorkspaceUser, Session, Product, ProductVariant, 
 
 ---
 
-## 13 AI Agent Specifications (V2)
+## 14 AI Agent Specifications (V2)
 
 ### 13.1 Wasel (Sales Closer) — MVP foundation, refined
 - 3-tier confidence (RES-04): ≥70 autonomous · 50–70 human-monitored · <50 escalate.
@@ -423,7 +511,7 @@ MVP entities (User, Workspace, WorkspaceUser, Session, Product, ProductVariant, 
 
 ---
 
-## 14 Integrations (V2)
+## 15 Integrations (V2)
 
 | Integration | Type | Auth | Notes |
 |---|---|---|---|
@@ -441,7 +529,7 @@ Webhook processing: HMAC verification + **idempotency** (NEW-FR-018) + retry/DLQ
 
 ---
 
-## 15 Resolved Open Questions (original Q1–Q12 → decisions)
+## 16 Resolved Open Questions (original Q1–Q12 → decisions)
 
 | Original | Decision | Ref |
 |---|---|---|
@@ -460,24 +548,24 @@ Webhook processing: HMAC verification + **idempotency** (NEW-FR-018) + retry/DLQ
 
 ---
 
-## 16 Remaining Open Questions (stakeholder-owned only)
+## 17 Remaining Open Questions (stakeholder-owned only)
 
 > These **cannot** be safely resolved from document logic — each is a commercial/legal/infra decision. They do **not** block V2 architecture; they parameterize configuration.
 
 | # | Question | Why open | Impact of each answer | Owner |
 |---|---|---|---|---|
-| OPEN-01 | Trial terms (length, card, scope) | GTM decision | Long trial → slower ARR; card → signup friction | CEO / Product Owner |
+| ~~OPEN-01~~ | ~~Trial terms (length, card, scope)~~ | **CLOSED -- RES-20:** 14-day free trial, no card, MVP scope. | -- | -- |
 | OPEN-02 | VAT applicability & timing (incl. success fee, ZATCA e-invoicing timing) | Legal/financial | Non-compliance vs overcharge | Finance / Legal |
 | OPEN-03 | KSA data residency commitment (in-region hosting) | Infra/cost | PDPL risk vs infra cost | CTO / Ops |
-| OPEN-04 | Overage commercial policy (grace+upgrade vs per-conversation charge) | Revenue model | Under-billing vs churn vs friction | CEO / Product Owner |
-| OPEN-05 | Attribution split default (AI 0% when human participated) | Trust posture | Lower MAR narrative vs dispute risk | Product Owner |
+| ~~OPEN-04~~ | ~~Overage commercial policy (grace+upgrade vs per-conversation charge)~~ | **CLOSED -- RES-16:** grace to period end + upgrade prompt + soft-lock; no per-conversation charge. | -- | -- |
+| ~~OPEN-05~~ | ~~Attribution split default (AI 0% when human participated)~~ | **CLOSED -- RES-01:** default AI share = 0% when human participated; configurable per workspace. | -- | -- |
 | OPEN-06 | Billing processor for Waslah's own subscription collection | Vendor choice | Collection reliability, FX | CTO / Finance |
 | OPEN-07 | Rased & Murshid AI specs (needed before V3) | Not V2-scoped | Rework at V3; non-blocking | Product Owner |
 | OPEN-08 | KSA launch timing relative to Egypt | Market sequence | Resourcing, dialect scope | CEO |
 
 ---
 
-## 17 Assumptions (A1–A14)
+## 18 Assumptions (A1–A14)
 
 1. **A1** Plans/fees USD; invoices in workspace currency at documented month-end rate.
 2. **A2** Trial 14 days, no card, MVP scope.
@@ -496,7 +584,7 @@ Webhook processing: HMAC verification + **idempotency** (NEW-FR-018) + retry/DLQ
 
 ---
 
-## 18 Traceability & Impact (vs base SRS)
+## 19 Traceability & Impact (vs base SRS)
 
 | Base SRS section | Change introduced by |
 |---|---|

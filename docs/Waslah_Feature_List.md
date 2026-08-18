@@ -8,6 +8,8 @@ This document is a flattened, at-a-glance feature list for planning, backlog gro
 - 🔵 **V3 / Could-Have** — completes the "Business OS" vision, needs proven PMF first
 - ⚪ **Future (this document only)** — new ideas beyond the current SRS, added below based on market/engineering judgment, not yet discovery-validated
 
+> **Companion business documents:** Read alongside [`Waslah_Market_Sizing.md`](./Waslah_Market_Sizing.md) (TAM $310M · SAM $75M · SOM Year 3 $4.2M ARR), [`Waslah_Competitive_Analysis.md`](./Waslah_Competitive_Analysis.md) (6 competitor profiles · positioning map · win signals), and [`Waslah_Financial_Model.md`](./Waslah_Financial_Model.md) (unit economics · 3-year P&L · funding milestones). These documents inform feature priority and ICP targeting but do not change SRS-defined scope.
+
 ---
 
 ## 1. Conversations
@@ -39,17 +41,25 @@ This document is a flattened, at-a-glance feature list for planning, backlog gro
 
 ## 2. AI Agents
 
-| Feature | Phase |
-|---|---|
-| Agent enable/disable, tone/personality config | 🟢 MVP |
-| Confidence threshold + escalation trigger config | 🟢 MVP |
-| **Wasel** — Sales Closer: product KB, FAQ training, objection handling, upsell rules, discount limits | 🟢 MVP |
-| **Aaed** — Follow-up & Recovery: abandonment detection, timing optimization, frequency caps | 🟡 V2 |
-| **Hafeth** — Margin Guard: per-product/category rules, exception approval workflow | 🟡 V2 |
-| **Munjiz** — Collections: invoice import, staged reminder templates, payment plans | 🔵 V3 |
-| **Rased** — Inventory: reorder points, dead-stock ID, demand forecasting | 🔵 V3 |
-| **Murshid** — Team Performance: benchmarks, coaching alerts, leaderboard | 🔵 V3 |
-| **Thaqib** — Executive Briefing: scheduled multi-module digest | 🔵 V3 |
+> **ICP Win Signals** (from Competitive Analysis §6 — use these to qualify pilot merchants and configure AI defaults):
+> - **Abandoned convs**: >10 unresponded WhatsApp messages/day → Aaed is immediate ROI
+> - **Manual overload**: >2 hrs/day on WhatsApp → Wasel closes the capacity gap
+> - **Bad discounts**: lost sales or margin pressure from informal discounts → Hafeth blocks the leak
+> - **COD rejection >10%**: shipping webhooks + attribution immediately change the commercial picture
+> - **"Already using WATI/Zoko"**: counter with AI closes the sale, not just routes the message
+
+| Feature | Phase | Competitive Note |
+|---|---|---|
+| Agent enable/disable, tone/personality config | 🟢 MVP | — |
+| Confidence threshold + escalation trigger config | 🟢 MVP | — |
+| **Wasel** — Sales Closer: product KB, FAQ training, objection handling, upsell rules, discount limits | 🟢 MVP | **Unique:** Only Arabic-native autonomous LLM sales closer in the market. WATI/Zoko are rule-based; Tidio/Intercom English-only. No direct competitor as of Aug 2026. |
+| **Aaed** — Follow-up & Recovery: abandonment detection, timing optimization, frequency caps | 🟡 V2 | **Differentiator:** WATI/Zoko have rule-based trigger sequences only. Aaed uses LLM-driven timing + outcome classification. The 48h cadence + max-3 cap (RES-05) is the legally-safe MENA standard. |
+| **Hafeth** — Margin Guard: per-product/category rules, exception approval workflow | 🟡 V2 | **Unique:** No competitor offers discount guardrails. This is the only feature that directly *protects* margin rather than recovering revenue. Moat durability: Medium (3-6 months to copy — ship fast). |
+| **Success-fee billing model** (Growth/Pro plans: 1%/0.5% of attributed revenue) | 🟡 V2 | **Unique business model:** No competitor aligns platform incentive with merchant outcome. Financial Model projects success fees reaching $660K ARR by Y3 — this is the NRR expansion engine (target 115% NRR). |
+| **Munjiz** — Collections: invoice import, staged reminder templates, payment plans | 🔵 V3 | — |
+| **Rased** — Inventory: reorder points, dead-stock ID, demand forecasting | 🔵 V3 | — |
+| **Murshid** — Team Performance: benchmarks, coaching alerts, leaderboard | 🔵 V3 | — |
+| **Thaqib** — Executive Briefing: scheduled multi-module digest | 🔵 V3 | — |
 
 ## 3. Product Catalog
 
@@ -89,12 +99,22 @@ This document is a flattened, at-a-glance feature list for planning, backlog gro
 
 ## 6. Analytics & Reporting
 
+> **Financial Model KPI targets** (from `Waslah_Financial_Model.md` §9) that the analytics dashboard MUST surface for owners:
+> - **MAR** (Managed Attributed Revenue) — North Star metric
+> - **Monthly churn** — target <3.5% Y1 / <2.5% Y3
+> - **Net Revenue Retention (NRR)** — target ≥108% Y2 / ≥115% Y3
+> - **AI cost / conversation** — target <$0.05 (NEW-BR-001 cost cap enforcement)
+> - **LTV:CAC ratio** — target ≥8x (validates partner channel investment)
+> These targets inform which analytics widgets appear on the Owner dashboard and which thresholds trigger alerts.
+
 | Feature | Phase |
 |---|---|
-| Revenue Recovered dashboard (headline metric) | 🟢 MVP |
+| Revenue Recovered dashboard (MAR headline metric) | 🟢 MVP |
 | Revenue by agent/channel/product/segment | 🟡 V2 |
 | Conversational metrics (AI resolution rate, response time, escalation/abandonment/recovery rate) | 🟢 MVP (core) / 🟡 V2 (full) |
 | Margin dashboard (avg. margin, Margin Guard events, discount trend) | 🟡 V2 |
+| AI cost per conversation tracker (NEW-BR-001 enforcement + workspace-level alert at 80% threshold) | 🟡 V2 |
+| NRR & plan upgrade trend (owner view of expansion revenue) | 🟡 V2 |
 | Team performance metrics + leaderboard | 🔵 V3 |
 | Collections metrics (DSO, collection rate) | 🔵 V3 |
 | Inventory metrics (stockout, turnover) | 🔵 V3 |
@@ -108,22 +128,24 @@ This document is a flattened, at-a-glance feature list for planning, backlog gro
 | Usage tracking (conversation counter, overage alerts) | 🟢 MVP |
 | Monthly invoicing, card/bank/Fawry payment | 🟡 V2 |
 | Attributed-revenue fee calculation engine | 🟡 V2 |
-| Dispute handling workflow | 🔵 V3 |
+| Dispute hold mechanic (revenue-share statement; disputed fees held pending; 14-day auto-resolve) | 🟡 V2 — ships with billing (RES-09) |
+| Full dispute adjudication workflow | 🔵 V3 |
 
 ## 8. Integrations
 
-| Feature | Phase |
-|---|---|
-| WhatsApp Business API (Meta, via BSP) | 🟢 MVP |
-| Instagram DM, Facebook Messenger | 🟡 V2 |
-| TikTok Messages | 🔵 V3 |
-| Shopify, WooCommerce | 🟢 MVP |
-| Salla, Zid | 🟡 V2 |
-| Fawry, COD | 🟢 MVP |
-| Mada, Tabby, Tamara, Paymob, Stripe | 🟡 V2 |
-| Shipping: Bosta, Aramex, SMSA | 🟡 V2 |
-| QuickBooks, Xero, Odoo (accounting) | 🔵 V3 |
-| Analytics: GA, Meta Pixel, Mixpanel, Amplitude | 🔵 V3 |
+| Feature | Phase | Notes |
+|---|---|---|
+| WhatsApp Business API (Meta, via BSP) | 🟢 MVP | Core channel; 93–96% penetration in Egypt/KSA |
+| Instagram DM, Facebook Messenger | 🟡 V2 | Unified inbox — Zoko/WATI/Trengo all have this; parity requirement |
+| TikTok Messages | 🔵 V3 | — |
+| Shopify, WooCommerce | 🟢 MVP | Core catalog sync |
+| Salla, Zid | 🟡 V2 | KSA-critical; ~60K+ Salla stores; no competitor has this |
+| **Salla App Store listing** | 🟡 V2 | **Competitive urgency (HIGH):** Salla is the highest-risk platform competitor (Competitive Analysis §2.6, Risk timeline 18-24 months). Listing Waslah on the Salla App Store converts a competitor threat into a distribution partnership. Financial Model bull-case ($5.2M ARR Y3) depends on this partnership. Target: submit App Store listing before Salla ships native AI. |
+| Fawry, COD | 🟢 MVP | Egypt-critical; no competitor has native Fawry |
+| Mada, Tabby, Tamara, Paymob, Stripe | 🟡 V2 | MENA payment coverage; Paymob is Egypt-critical |
+| Shipping: Bosta, Aramex, SMSA | 🟡 V2 — delivery-state webhooks drive COD attribution events (RES-17, NEW-FR-011); required for COD revenue accuracy in V2 | — |
+| QuickBooks, Xero, Odoo (accounting) | 🔵 V3 | — |
+| Analytics: GA, Meta Pixel, Mixpanel, Amplitude | 🔵 V3 | — |
 
 ## 9. Settings & Administration
 
@@ -156,7 +178,7 @@ Everything above reflects what's already in the SRS. What follows is **new** —
 | **Embedded Working Capital ("Waslah Capital")** — short-term inventory/cash-flow financing offered or brokered using the platform's real-time visibility into a merchant's revenue | This is the standard next move once a platform has clean, real-time SME revenue data (see Shopify Capital, Amazon Lending) — high margin, strong retention lock-in, and directly serves SME cash-flow pain already flagged in Section 02's Margin Leakage Map | Future Vision (requires regulatory/lending partner work) |
 | **E-Invoicing / Tax Compliance Agent** — auto-generates ZATCA-compliant e-invoices in Saudi Arabia and equivalent compliant documents in Egypt from Orders data | Both markets have (or are rolling out) mandatory e-invoicing regimes; solving a real compliance headache most small merchants currently outsource or do manually increases stickiness independent of the AI-sales value prop | V2/V3 candidate — worth pulling forward if it proves to be a fast, low-complexity win |
 | **Multi-Store / Franchise Console** — roll-up dashboard and settings across multiple branches/locations for one merchant | Natural expansion once individual single-location merchants are retained — this is where ARPU grows without adding new logos | V3+ |
-| **White-Label / Agency Partner Program** — let marketing/social-media agencies that already manage WhatsApp/IG for multiple small merchants resell or manage Waslah on their clients' behalf | A GTM multiplier — agencies already touch the exact customer base at scale; this converts a channel competitor into a channel partner | Post-pilot, once unit economics are proven with direct merchants |
+| **White-Label / Agency Partner Program** — agencies that manage WhatsApp/IG for multiple merchants can resell or manage Waslah on their clients' behalf | **Promoted from "post-pilot" to 🔵 V3.** Financial Model §2.1 projects 35% of Y2 and 50% of Y3 new merchants acquired via partner/agency channel — that assumption requires this program to exist. A GTM multiplier: agencies already manage the exact customer base at scale. Without this, the Financial Model Y2/Y3 growth rates are at risk. | 🔵 V3 |
 | **Marketplace Catalog Expansion (Amazon.sa, noon, Jumia)** | Broadens the catalog data source beyond Shopify/Salla/Zid for merchants who sell primarily on marketplaces rather than owned stores | V3+ |
 | **Predictive LTV & Cohort Analytics** | Deeper financial planning tool for owners who graduate past "did I recover revenue today" into "what is my customer base worth" — a natural Analytics-domain maturity step | V3+ |
 | **AI Negotiation Strategy A/B Testing** — systematically test and auto-optimize different closing styles per customer segment | This becomes possible only once there's enough conversation volume/data — but it's a genuine, hard-to-copy data moat once it exists, worth flagging early even though it can't be built early | Future Vision |

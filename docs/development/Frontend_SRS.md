@@ -1,4 +1,4 @@
-# Waslah — AI Revenue Guardian
+﻿# Waslah — AI Revenue Guardian
 ## Frontend Developer SRS (Web Application Specification)
 ### Version 2.2 | August 2026
 
@@ -93,7 +93,7 @@ Every data-driven component supports: **loading** (skeleton, no layout shift) ·
 
 - Languages: Arabic (default) and English; full **RTL/LTR** mirroring with `dir` attribute + logical properties (no left/right hardcoding).
 - Dialects: UI in Modern Standard Arabic; AI transcripts display customer dialect as-is.
-- Number formatting: `Intl.NumberFormat` — Arabic-Indic numerals option in Settings; currency (EGP/SAR/USD) with correct grouping; dates both Gregorian + Hijri option, `Africa/Cairo` / `Asia/Riyadh` / `Asia/Dubai`.
+- Number formatting: `Intl.NumberFormat` — Arabic-Indic numerals option controlled by a **workspace-level `numeral_format` setting** (`ARABIC_INDIC` | `WESTERN`, default `WESTERN`) stored in the `Workspace` model (see Backend_SRS §7.3). The setting is configurable per-workspace in Settings → Workspace. Currency (EGP/SAR/USD) with correct grouping; dates both Gregorian + Hijri option, `Africa/Cairo` / `Asia/Riyadh` / `Asia/Dubai`.
 - Time: 24h/AM-PM per locale; relative times ("5 min ago") localized.
 - Charts must mirror correctly under RTL (axis/reverse-series as needed).
 - All copy ships in both locales; truncation/sizing must tolerate Arabic (wider glyphs, no mid-word breaks).
@@ -220,6 +220,7 @@ Idle timeout warning (30 min) + refresh flow; logout revokes everywhere.
 - **Rules**: global floor, per-category floors (add/edit/disable), hard-floor (cost) override; discount budget per agent/period (config).
 - **Exception queue**: pending exception cards — customer, product, requested price/discount, computed margin, justification; **approve/reject** with 1-tap + optional note; countdown to auto-reject (1h); approve=sole owner (Admin sees but cannot approve).
 - **Decision log**: filterable table (auto-approved/exceptions/blocked) with reasons + margin impact in currency.
+- **Mobile specification (critical — owner is typically on mobile for real-time approvals):** The exception queue MUST be fully functional at ≤ 375px width. Each exception card must render approve/reject as large touch targets (≥ 44px) without horizontal scroll. The 1h auto-reject countdown must be prominently displayed as a live timer. An optional push notification (via Firebase) deep-links directly into the exception detail screen. WebSocket `margin:exception` events must trigger a notification badge on the mobile bottom nav.
 
 ### 8.10 Aaed Follow-ups (V2)
 - Config: enable/disable, max attempts (default 3), min interval (48h), detection window, templates per stage, opt-out handling notice.
@@ -245,7 +246,7 @@ Idle timeout warning (30 min) + refresh flow; logout revokes everywhere.
 - **Users** (owner/admin): invite by email + role; list w/ roles; change role (audit); remove; pending invites w/ resend/revoke.
 - **Labels**: team label CRUD (name/color), applied in inbox/conversation detail; AI auto-labeling toggle per label (owner/admin).
 - **AI**: model selection, temperature, max tokens, confidence threshold (3-tier), agent toggles (Wasel/Aaed/Hafeth), operating hours, language priority.
-- **Assignments & escalation** (owner/admin; manager edits with approval): auto-assignment strategy (manual / round-robin / load-balanced / skill-based) + skill→agent mapping; escalation rules keyed to time inactivity / negative sentiment / low confidence / keyword / explicit request, each with a target action.
+- **Assignments & escalation** (owner/admin only for mutation; manager read-only): auto-assignment strategy (manual / round-robin / load-balanced / skill-based) + skill→agent mapping — configurable by owner/admin only (RES-19 RBAC matrix; manager has no assignment-rule configure capability). Escalation rules keyed to time inactivity / negative sentiment / low confidence / keyword / explicit request, each with a target action — owner/admin edit; manager can request changes (owner/admin approval required).
 - **Integrations**: (link to §8.12).
 - **Notifications**: channel toggles (in-app/email/WhatsApp/push) per event type (new lead, escalation, margin alert, payment received, usage alerts, briefing).
 - **Security**: password change, **2FA enable/disable (TOTP)**, active sessions (view/revoke), data export request, retention note.
@@ -264,7 +265,7 @@ Filterable table: actor, action, entity, before/after diff (expandable), IP, tim
 - **Server state**: TanStack Query per resource with cache keys `[workspace, resource, filters]`; optimistic updates for toggles/labels; invalidations on WS events.
 - **Mutations**: `useMutation` with shared error extraction (API error codes → localized messages). Idempotent retry hints.
 - **Auth state**: session store (access/refresh tokens, user, workspace, roles); refresh interceptor on 401; redirect to login on expiry.
-- **Permission helper**: `can(role, capability)` matching Backend_SRS §8.3; used for both rendering and guard display.
+- **Permission helper**: `can(role: WorkspaceRole, capability: Capability): boolean` — imports `Capability` enum and `ROLE_CAPABILITIES` map from `packages/shared-types/src/rbac.ts` (see Backend_SRS §8.5). Used for both conditional rendering (`{can(role, Capability.APPROVE_MARGIN_EXCEPTION) && <ApproveButton />}`) and route guards. Never duplicate capability strings — always import from `shared-types`.
 - **Feature flags**: read from `/settings/ai` + env-driven sandbox flag (mock channel shown as "Demo mode").
 - **Currency/timezone formatting** centralized in a `format` util (single source of truth).
 

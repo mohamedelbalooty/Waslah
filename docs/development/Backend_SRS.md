@@ -1,4 +1,4 @@
-# Waslah — AI Revenue Guardian
+﻿# Waslah — AI Revenue Guardian
 ## Backend Developer SRS (Server Implementation Specification)
 ### Version 2.2 | August 2026
 
@@ -61,8 +61,8 @@ Provide the backend team with the complete, unambiguous contract for building th
 | Queues / jobs | BullMQ on Redis 7 |
 | Auth | JWT (access + refresh), bcrypt (password), OAuth2 flows for integrations |
 | Security | helmet, cors, express-rate-limit, parameterized queries |
+| AI | Provider abstraction (`openai` / `anthropic` / `mock`) via a unified `LLMProvider` interface; `@anthropic-ai/sdk` and `openai` as concrete adapters; cost-metered |
 | Logging | pino (structured JSON), pino-http request logging |
-| AI | Provider abstraction (`openai` / `anthropic` / `mock`); cost-metered |
 | Real-time | WebSocket (Socket.IO or ws) for inbox + notifications; SSE fallback |
 | Test | vitest; supertest for HTTP; unit tests for pure rule engines |
 | E2E | Playwright (against API) for critical flows |
@@ -263,7 +263,7 @@ All env validated at boot by `src/config/env.ts` (zod). Never log secrets. Sampl
 | Model | Key fields |
 |---|---|
 | `User` | email (unique), password_hash, phone, name, avatar_url, two_factor_enabled (V2), totp_secret (encrypted) |
-| `Workspace` | name, logo_url, business_type, currency, timezone, language, status, tax_profile (JSONB: country, tax_id, vat_rate, enabled) |
+| `Workspace` | name, logo_url, business_type, currency, timezone, language, numeral_format (`ARABIC_INDIC` \| `WESTERN`, default `WESTERN`), status, tax_profile (JSONB: country, tax_id, vat_rate, enabled) |
 | `WorkspaceUser` | workspace_id, user_id, role; `@@unique([workspaceId, userId])` |
 | `Session` | user_id, token_hash, refresh_token_hash, expires_at, ip_address, user_agent, last_activity_at |
 | `UserInvite` | workspace_id, email, role, token_hash, expires_at, accepted_at |
@@ -304,7 +304,7 @@ All env validated at boot by `src/config/env.ts` (zod). Never log secrets. Sampl
 | `CustomerNote` | customer_id, author_id, content |
 | `CustomerTag` | workspace_id, name (`@@unique([workspaceId, name])`), color |
 
-**Orders & finance:** `Order`, `OrderItem`, `Invoice`, `Payment`, `Refund`, `AttributionEvent`, `DisputeRecord`, `PaymentPlan`.
+**Orders & finance:** `Order`, `OrderItem`, `Invoice`, `Payment`, `Refund`, `AttributionEvent`, `MarginDecision`, `DisputeRecord`, `PaymentPlan`.
 
 | Model | Key fields |
 |---|---|
@@ -314,7 +314,8 @@ All env validated at boot by `src/config/env.ts` (zod). Never log secrets. Sampl
 | `Payment` | invoice_id?, order_id?, amount, method, transaction_id, provider_ref, status, link_token, link_expires_at |
 | `Refund` | order_id, amount, reason, status, reversal_event_id? |
 | `AttributionEvent` | workspace_id, order_id, conversation_id, amount, attribution_type, model, status, reversed_at, reversal_reason; immutable |
-| `DisputeRecord` | workspace_id, attribution_event_id, status (OPEN | RESOLVED), reason, resolution, auto_resolve_at |
+| `MarginDecision` | workspace_id, order_id?, conversation_id?, proposed_price `Decimal(14,2)`, computed_margin `Decimal(6,4)` (unrounded), status (`MarginDecisionStatus`), justification (nullable), decided_by (user_id, nullable), decided_at (nullable), auto_reject_at, alternatives JSONB (bundle/upsell suggestions), created_at. Immutable once decided. *(NEW-FR-017/027, RES-12/15)* |
+| `DisputeRecord` | workspace_id, attribution_event_id, status (OPEN \| RESOLVED), reason, resolution, auto_resolve_at |
 | `PaymentPlan` | invoice_id, customer_id, terms JSONB, status, reminder_stage |
 
 **AI & billing:** `AgentConfig`, `PromptTemplate`, `LLMCall`, `ToolExecution`, `Plan`, `Subscription`, `UsageRecord`, `BillingInvoice`.
@@ -390,6 +391,102 @@ All env validated at boot by `src/config/env.ts` (zod). Never log secrets. Sampl
 - Middleware: `authenticate` (JWT) → `authorize(capability)` → per-entity row checks (workspace tenant + assignment rules for AGENT role).
 - Every mutation that changes state or money writes an AuditLog entry (5.6).
 
+
+### 8.5 Capability Enum (`packages/shared-types/src/rbac.ts`)
+
+The `Capability` enum is the **single source of truth** for all permission strings. Published from `packages/shared-types` and consumed by:
+- **Backend:** `lib/rbac.ts` `authorize(capability: Capability)` middleware  
+- **Frontend:** `can(role, capability: Capability)` permission helper (Frontend_SRS §9)
+
+This guarantees the frontend and backend permission model are always in sync — no string drift across the monorepo.
+
+```typescript
+// packages/shared-types/src/rbac.ts
+
+export const Capability = {
+  // Conversations
+  VIEW_ALL_CONVERSATIONS:       'VIEW_ALL_CONVERSATIONS',       // Owner, Admin, Manager (team), Viewer
+  VIEW_ASSIGNED_CONVERSATIONS:  'VIEW_ASSIGNED_CONVERSATIONS',  // Agent (assigned only)
+  ASSIGN_CONVERSATION:          'ASSIGN_CONVERSATION',          // Owner, Admin, Manager, Agent (claim/unclaim)
+  TRANSFER_CONVERSATION:        'TRANSFER_CONVERSATION',         // Owner, Admin, Manager
+  ESCALATE_CONVERSATION:        'ESCALATE_CONVERSATION',         // Owner, Admin, Manager, Agent
+  CLOSE_CONVERSATION:           'CLOSE_CONVERSATION',            // Owner, Admin, Manager, Agent
+  RETURN_TO_AI:                 'RETURN_TO_AI',                  // Owner, Admin, Manager, Agent
+  SEND_MESSAGE:                 'SEND_MESSAGE',                  // Owner, Admin, Manager, Agent
+
+  // Labels
+  MANAGE_LABELS:                'MANAGE_LABELS',                 // Owner, Admin
+  APPLY_LABEL:                  'APPLY_LABEL',                   // Owner, Admin, Manager, Agent
+
+  // Catalog
+  MANAGE_PRODUCTS:              'MANAGE_PRODUCTS',               // Owner, Admin
+  READ_PRODUCTS:                'READ_PRODUCTS',                 // All roles
+  READ_COST_PRICE:              'READ_COST_PRICE',               // Owner, Admin, Accountant (NEW-SEC-001)
+
+  // Customers
+  MANAGE_CUSTOMERS:             'MANAGE_CUSTOMERS',              // Owner, Admin, Manager, Agent (tags/qualification)
+  READ_CUSTOMERS:               'READ_CUSTOMERS',                // All roles
+
+  // Orders & Payments
+  CREATE_ORDER:                 'CREATE_ORDER',                  // Owner, Admin, Manager, Agent
+  EDIT_ORDER:                   'EDIT_ORDER',                    // Owner, Admin, Manager, Agent
+  CANCEL_ORDER:                 'CANCEL_ORDER',                  // Owner, Admin, Manager (processing: Manager+)
+  GENERATE_PAYMENT_LINK:        'GENERATE_PAYMENT_LINK',         // Owner, Admin, Manager, Agent
+  RECORD_PARTIAL_PAYMENT:       'RECORD_PARTIAL_PAYMENT',        // Owner, Admin, Accountant
+  PROCESS_REFUND:               'PROCESS_REFUND',                // Owner, Admin, Accountant
+  VOID_INVOICE:                 'VOID_INVOICE',                  // Owner, Accountant
+
+  // Margin Guard
+  QUOTE_WITHIN_GUARDRAILS:      'QUOTE_WITHIN_GUARDRAILS',       // Owner, Admin, Manager, Agent
+  APPROVE_MARGIN_EXCEPTION:     'APPROVE_MARGIN_EXCEPTION',      // Owner only (sole -- RES-19)
+  MANAGE_MARGIN_RULES:          'MANAGE_MARGIN_RULES',           // Owner, Admin
+
+  // Attribution & Disputes
+  VIEW_ATTRIBUTION:             'VIEW_ATTRIBUTION',              // Owner, Admin, Accountant
+  RESOLVE_DISPUTE:              'RESOLVE_DISPUTE',               // Owner only (sole -- RES-19)
+
+  // Analytics & Financial
+  VIEW_FINANCIAL_DATA:          'VIEW_FINANCIAL_DATA',           // Owner, Admin, Accountant, Viewer
+  VIEW_TEAM_ANALYTICS:          'VIEW_TEAM_ANALYTICS',           // Owner, Admin, Manager
+  VIEW_MARGIN_ANALYTICS:        'VIEW_MARGIN_ANALYTICS',         // Owner, Admin, Accountant
+
+  // AI Agents
+  MANAGE_AGENTS:                'MANAGE_AGENTS',                 // Owner, Admin
+  VIEW_AGENTS:                  'VIEW_AGENTS',                   // Owner, Admin, Manager
+
+  // Users & Workspace
+  MANAGE_USERS:                 'MANAGE_USERS',                  // Owner, Admin
+  MANAGE_BILLING:               'MANAGE_BILLING',                // Owner only (sole -- RES-19)
+  MANAGE_WORKSPACE:             'MANAGE_WORKSPACE',              // Owner
+  CONFIGURE_ASSIGNMENT_RULES:   'CONFIGURE_ASSIGNMENT_RULES',    // Owner, Admin only
+  CONFIGURE_ESCALATION_RULES:   'CONFIGURE_ESCALATION_RULES',    // Owner, Admin (Manager: read-only)
+  VIEW_AUDIT_LOG:               'VIEW_AUDIT_LOG',                // Owner, Admin
+  EXPORT_DATA:                  'EXPORT_DATA',                   // Owner, Admin
+  MANAGE_SECURITY:              'MANAGE_SECURITY',               // Owner
+} as const;
+
+export type Capability = typeof Capability[keyof typeof Capability];
+```
+
+**Backend usage (`lib/rbac.ts`):**
+```typescript
+import { Capability, ROLE_CAPABILITIES } from 'shared-types';
+export const authorize = (cap: Capability) => (req, res, next) => {
+  if (!ROLE_CAPABILITIES[req.user.workspaceRole]?.includes(cap))
+    return res.status(403).json({ success: false, error: { code: 'UNAUTHORIZED' } });
+  next();
+};
+```
+
+**Frontend usage (`utils/permissions.ts`):**
+```typescript
+import { Capability, ROLE_CAPABILITIES } from 'shared-types';
+export const can = (role: string, cap: Capability): boolean =>
+  ROLE_CAPABILITIES[role]?.includes(cap) ?? false;
+// Usage: {can(user.role, Capability.APPROVE_MARGIN_EXCEPTION) && <ApproveButton />}
+```
+
+> The full `ROLE_CAPABILITIES` map (role -> Capability[]) is defined in `shared-types` alongside the enum. See the Backend_SRS §8.3 matrix for the human-readable permission table this maps to.
 ---
 
 ## 9. Business Rule Engines (`src/core/**` — pure & tested)
@@ -766,6 +863,8 @@ Base: `https://api.waslah.ai/v1`. All endpoints require `Authorization: Bearer <
 | `POST /webhooks/payments/fawry` | Fawry | provider HMAC | payment result |
 | `POST /webhooks/payments/mada` | Gateway | gateway HMAC | via HyperPay/Tap |
 | `POST /webhooks/payments/tabby` | Tabby | signature | checkout result |
+| `POST /webhooks/payments/paymob` | Paymob | HMAC `PAYMOB-SIGNATURE` | Egypt-critical; payment result/refund (NEW-FR-022 v2.2) |
+| `POST /webhooks/payments/stripe` | Stripe | `Stripe-Signature` (webhook secret) | international cards; payment_intent / charge events |
 | `POST /webhooks/ecommerce/shopify` | Shopify | HMAC `X-Shopify-Hmac-Sha256` | orders/products/customers |
 | `POST /webhooks/ecommerce/woocommerce` | Woo | secret | orders/products |
 | `POST /webhooks/ecommerce/salla` | Salla | signature | orders/products |

@@ -64,6 +64,7 @@ Provide the backend team with the complete, unambiguous contract for building th
 | AI | Provider abstraction (`openai` / `anthropic` / `mock`) via a unified `LLMProvider` interface; `@anthropic-ai/sdk` and `openai` as concrete adapters; cost-metered |
 | Logging | pino (structured JSON), pino-http request logging |
 | Real-time | WebSocket (Socket.IO or ws) for inbox + notifications; SSE fallback |
+| Push notifications | `firebase-admin` SDK (FCM) | Mobile push for margin:exception approvals (1h window per RES-15); future mobile app notifications |
 | Test | vitest; supertest for HTTP; unit tests for pure rule engines |
 | E2E | Playwright (against API) for critical flows |
 
@@ -900,7 +901,7 @@ Processing contract: verify signature → **idempotent dedupe** (`provider + eve
 | SMSA | shipping | REST + webhook | API key | — | KSA; delivery events → COD attribution |
 | Twilio | comms | REST | keys | — | SMS fallback (NEW-FR-020) |
 | SendGrid | comms | REST | key | — | email notifications |
-| Firebase | comms | REST | service account | — | push |
+| Firebase (FCM) | comms | REST (`firebase-admin` SDK) | service account | -- | Push notifications to owner; **required for margin:exception approval flow** (1h auto-reject window per RES-15; FCM triggered by `margin.exception` queue worker); future mobile app notifications |
 | Voice transcription | AI media | provider abstraction | key | — | AR/EN/Arabizi (NEW-FR-023) |
 | Image recognition | AI media | provider abstraction | key | — | catalog matching (NEW-FR-024) |
 
@@ -935,7 +936,7 @@ All provider credentials encrypted at rest (AES-256); never logged.
 | Backups | point-in-time, 30-day retention |
 | Scalability | horizontal auto-scale on queue depth; read replicas; PgBouncer; Redis cache 99% catalog hit |
 | Observability | structured logs, Prometheus/Grafana, OpenTelemetry traces, Sentry, LLM call logging (NEW-NFR-004) |
-| AI cost | blended < $0.05/conversation |
+| AI cost | blended < $0.05/conversation (NEW-BR-001) |
 | Retention | conversations cold-archive 365d; analytics 730d; financial 10y (RES-13) |
 
 ---

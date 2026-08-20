@@ -6,7 +6,7 @@
 >
 > **Read me first.** This document is the authoritative specification for the **web frontend** of Waslah V2 (web-first; native mobile is a separate, deferred workstream per decision). It defines screens, components, states, RTL/bilingual behavior, routing, state management, real-time behavior, accessibility, and the API integration map.
 >
-> **Traceability.** Requirement IDs trace to `docs/Waslah_AI_Revenue_Guardian_SRS.md`, `docs/Waslah_Feature_List.md`, and `docs/Waslah_AI_Revenue_Guardian_SRS_V2.md` (resolved decisions RES-xx). On any conflict, **SRS_V2 wins**.
+> **Traceability.** Requirement IDs trace to `docs/Waslah_AI_Revenue_Guardian_SRS.md`, `docs/Waslah_Feature_List.md`, `docs/Waslah_AI_Revenue_Guardian_SRS_V2.md` (resolved decisions RES-xx), `docs/Waslah_Market_Sizing.md`, `docs/Waslah_Competitive_Analysis.md`, and `docs/Waslah_Financial_Model.md`. On any conflict, **SRS_V2 wins**.
 >
 > **Companion.** Server behavior is specified in `development/Backend_SRS.md`. Both share the API contract (see Backend_SRS §14) and the RBAC matrix (Backend_SRS §8.3). The frontend consumes the REST API + the WebSocket API (Backend_SRS §13).
 
@@ -159,6 +159,7 @@ Idle timeout warning (30 min) + refresh flow; logout revokes everywhere.
 - **Revenue card** (Owner/Admin/Accountant/Viewer): attributed revenue today vs yesterday/last week, sparkline, currency-localized. Sub-lines: Revenue Recovered (Aaed), total attributed.
 - **Conversations card**: active, AI-handled, escalated (Agent/Manager see their metrics + queue).
 - **Margin guard card** (Owner/Admin): events today (blocked/approved/pending); pending exceptions link to Hafeth queue.
+- **Business Health card** (Owner only): MAR vs target, monthly churn (current vs <3.5% target), NRR trailing 3-month, AI cost/conversation (green if <$0.05, amber if $0.04-$0.05, red if >$0.05). Sourced from `/analytics/kpi-summary` endpoint. See Financial Model §9 for targets.
 - **Aaed card** (V2): recoveries this week, recovery rate, abandoned now.
 - **Quick actions**: view conversations, add product, margin exceptions, billing.
 - **States**: skeleton on load; empty state on first day (guidance CTA); error + retry; real-time updates via WS.
@@ -212,6 +213,8 @@ Idle timeout warning (30 min) + refresh flow; logout revokes everywhere.
   - Team (manager+): per-agent conversations/conversion/response time/satisfaction (leaderboard widget is **V3-deferred**).
   - Margin (owner/admin/accountant): avg margin/order, guard events (approved/blocked/escalated), discount frequency + depth, margin trend, profitability by product.
   - Collections (owner/admin/accountant): invoiced/collected/DSO/overdue (V2 scaffolding).
+  - Platform Health (owner only): NRR trailing-3-month trend (target >=108% Y2/>=115% Y3); AI cost/conversation chart (7d/30d, threshold line at $0.05); plan upgrade funnel (Starter -> Growth -> Pro) -- sourced from `/analytics/platform-health`. Corresponds to Feature List §6 "NRR & plan upgrade trend" and "AI cost per conversation tracker" (both V2).
+
 - Export: current view → CSV/PDF (owner/admin).
 - Custom reports: config builder + schedule (**V3-deferred** — hide the Reports tab in V2).
 - Charts responsive + RTL-aware; states: loading, no data, error.

@@ -1,0 +1,20 @@
+{
+  "name": "waslah",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Waslah AI Revenue Guardian — multi-tenant SaaS monorepo",
+  "engines": {
+    "node": ">=20 <21"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint",
+    "test": "turbo test"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  }
+}

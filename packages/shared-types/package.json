@@ -1,0 +1,36 @@
+{
+  "name": "@waslah/shared-types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Single source of truth for Waslah domain contracts (populated by X-01)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=20 <21"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . && prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "@waslah/config": "workspace:*",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^3.0.5"
+  }
+}

@@ -12,7 +12,9 @@
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
-    "test": "turbo test"
+    "test": "turbo test",
+    "db:up": "docker compose up -d --wait",
+    "db:reset": "docker compose down -v && docker compose up -d --wait"
   },
   "devDependencies": {
     "turbo": "^2.3.3"

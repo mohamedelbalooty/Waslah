@@ -58,7 +58,7 @@ This is a pnpm monorepo per plan.md: `apps/api/src/`, `apps/web/app/`, `packages
 - [X] T007 [P] [US1] Scaffold `apps/api`: `package.json` (express, typescript, vitest, dev/build/typecheck/lint/test scripts), `tsconfig.json` extending `packages/config/tsconfig.base.json`, `src/routes/health.ts` returning the contract body, `src/server.ts` binding `process.env.PORT` (default `4000`) and mounting the route — makes T005 green
 - [X] T008 [P] [US1] Scaffold `apps/web`: `package.json` (next@15, react, typescript, vitest, matching scripts), `next.config.ts`, `tsconfig.json`, `app/layout.tsx`, `app/page.tsx` rendering heading containing `Waslah` — makes T006 green
 - [X] T009 [US1] Wire `packages/shared-types`: `package.json` with `exports` pointing at `src/index.ts` and a `build` (tsc) script; create `src/index.ts` with a placeholder typed export; add it as a dependency of BOTH `apps/api/package.json` and `apps/web/package.json` and import the placeholder once in each app so builds prove FR-006 (depends on T007, T008)
-- [ ] T010 [US1] Write setup documentation in `README.md`: prerequisites (Node 20 LTS + Corepack, Docker), install, start, stop, reset commands, port-conflict troubleshooting, cross-platform notes — sufficient for US1's Independent Test with zero human help (depends on T007, T008)
+- [X] T010 [US1] Write setup documentation in `README.md`: prerequisites (Node 20 LTS + Corepack, Docker), install, start, stop, reset commands, port-conflict troubleshooting, cross-platform notes — sufficient for US1's Independent Test with zero human help (depends on T007, T008)
 
 **Checkpoint**: `pnpm dev` boots both apps; both smoke tests pass; a newcomer passes US1's Independent Test.
 
@@ -72,9 +72,9 @@ This is a pnpm monorepo per plan.md: `apps/api/src/`, `apps/web/app/`, `packages
 
 ### Implementation for User Story 2
 
-- [ ] T011 [US2] Create `docker-compose.yml` per data-model.md §1: service `postgres` (`postgres:16-alpine`, host port `5432`, named volume `pgdata`, `pg_isready` healthcheck interval ≤ 5s) and service `redis` (`redis:7-alpine`, port `6379`, `--appendonly yes` persisted to volume `redisdata`, `redis-cli ping` healthcheck); credentials read from env with documented local defaults (depends on T004)
-- [ ] T012 [US2] Add root scripts to `package.json`: `db:up` = `docker compose up -d --wait`, `db:reset` = `docker compose down -v && docker compose up -d --wait` — success requires healthy state (depends on T001, T011)
-- [ ] T013 [US2] Execute quickstart S3/S4 against the live stack: insert scratch row into Postgres and key into Redis → stop/start → verify retention → `pnpm db:reset` → verify removal and health (evidence recorded) (depends on T011, T012)
+- [X] T011 [US2] Create `docker-compose.yml` per data-model.md §1: service `postgres` (`postgres:16-alpine`, host port `5432`, named volume `pgdata`, `pg_isready` healthcheck interval ≤ 5s) and service `redis` (`redis:7-alpine`, port `6379`, `--appendonly yes` persisted to volume `redisdata`, `redis-cli ping` healthcheck); credentials read from env with documented local defaults (depends on T004)
+- [X] T012 [US2] Add root scripts to `package.json`: `db:up` = `docker compose up -d --wait`, `db:reset` = `docker compose down -v && docker compose up -d --wait` — success requires healthy state (depends on T001, T011)
+- [X] T013 [US2] Execute quickstart S3/S4 against the live stack: insert scratch row into Postgres and key into Redis → stop/start → verify retention → `pnpm db:reset` → verify removal and health (evidence recorded) (depends on T011, T012)
 
 **Checkpoint**: US1 + US2 both work independently; full S1 flow (with `db:up`) now passes.
 

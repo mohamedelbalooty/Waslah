@@ -1,108 +1,214 @@
-﻿# Waslah AI Revenue Guardian
-## Master Implementation Plan -- v1.0
-### August 2026 | Authority: Waslah Constitution v1.0.0
+﻿# Waslah AI Revenue Guardian — Master Implementation Plan
 
-> **Purpose of this document.** This is the program-level source of truth for the Waslah
-> implementation program. It defines the full portfolio of specifications, their dependency
-> order, build phases, and the workflow for driving individual specifications through Spec Kit.
-> It is NOT a technical plan or a task list -- those live inside individual specifications.
->
-> **Authority chain:** Constitution -> this plan -> individual specifications -> technical plans -> tasks -> implementation.
-> On any conflict, the SRS_V2 (`Waslah_AI_Revenue_Guardian_SRS.md`) is the primary requirements
-> authority. This plan must not contradict the constitution.
->
-> **Reviewed against:** `Waslah_AI_Revenue_Guardian_SRS.md` (V2.1), `Backend_SRS.md` (v2.2),
-> `Frontend_SRS.md` (v2.2), `Waslah_Feature_List.md`, `Waslah_Tech_Stack.md`, and
-> `constitution.md` (v1.0.0).
+**Version**: 1.2.0
+**Date**: 2026-08-21
+**Status**: Approved
+**Constitution**: v1.0.0
+**Authority**: `Waslah_AI_Revenue_Guardian_SRS.md` (V2.1) → this plan → individual specs → tasks → implementation
 
 ---
 
-## Part 0 -- Key Corrections to the Draft Plan
+## Table of Contents
 
-> These corrections apply to the ChatGPT-generated draft that was reviewed before this plan was
-> written. They are documented here so the rationale is traceable.
-
-| # | Correction | Draft assumption | Authoritative position |
-|---|---|---|---|
-| C-01 | **FND stream renamed to X-00** | Called "Phase 0 Foundation" in the draft | Foundation specs are cross-cutting prerequisites, not a numbered phase. Renamed to X-00 to make clear they block everything else. |
-| C-02 | **X-01 Shared Contracts is Phase 0, not Phase 4 MVP hardening** | Draft placed X-01 in "MVP Hardening" | Constitution XI: `shared-types` MUST precede backend and frontend work. Shared contracts must be the first non-infra deliverable. |
-| C-03 | **DB-09 (RBAC) split and sequenced correctly** | Draft had DB-09 as one spec covering both RBAC data and CRM | Backend SRS scopes RBAC data to WorkspaceUser/role/invite tables -- needed by MVP auth. CRM customer profile extensions are V2. Split: DB-02 covers RBAC-required user/role tables at MVP; DB-09 covers V2 team management extensions only. |
-| C-04 | **BE-16 is Media Intelligence, scoped V2** | Draft listed BE-16 as MVP-adjacent | Feature List tags voice transcription and image recognition as V2 (NEW-FR-023/024). Explicitly V2. |
-| C-05 | **X-specs are NOT a final phase** | Draft placed all X-02..X-07 in "Phase 4 MVP Hardening" | Constitution IX, XIII, XIV: security, reliability, tenant isolation, and testing are first-class from day one. X-specs define standards that APPLY to every spec from Phase 1. Authored early, not deferred. |
-| C-06 | **FE-05 Inbox starts at MVP with WhatsApp only** | Draft implied inbox is V2 | Feature List and SRS: unified inbox with WhatsApp is an MVP dependency for Wasel. Instagram/Messenger added in V2 (Wave V2-E). |
-| C-07 | **BE-17 Analytics is a thin layer, not a major stream** | Draft listed as major BE-17 | Backend SRS scopes analytics as queue-driven aggregation against existing domain data. A lightweight BE-17 spec covers the analytics API surface and metric aggregation jobs only. |
-| C-08 | **DB-13 Analytics is late V2** | Draft ordering was ambiguous | Analytics snapshots depend on all domain data existing. DB-13 is valid but built last in the DB wave after domain data is stable. |
-| C-09 | **PaymentPlan schema exists now; behavior is V3** | SRS 09.1: "V3 consumer; model now" | `PaymentPlan` entity goes into DB-05 with `status=DRAFT` convention. No business logic until Munjiz (V3). Schema may exist; behavior does not. |
-| C-10 | **DB-14 AuditLog is MVP, not late V2** | Draft placed DB-14 last | NEW-FR-017 and Constitution VIII: audit logging required from day one. AuditLog schema goes into MVP database wave. AuditLog writer (lib/audit.ts) is part of BE-01. |
-| C-11 | **Phase 3 BE-08 is Attribution, not Billing** | Draft used "BE-08 Billing" in Phase 3 | Billing (subscription fees, revenue-share, invoicing) is V2 (BE-09). Attribution (AttributionEvent, MAR) is MVP and belongs to Phase 3. |
-| C-12 | **Success-fee billing model is V2, not MVP** | Draft sequencing implied billing in MVP | Feature List tags "Success-fee billing model" as V2. MVP uses manual billing foundations only. Full fee engine + automated invoicing ships in V2 (BE-09/Wave V2-D). |
+1. [Executive Summary](#1-executive-summary)
+2. [Key Decisions](#2-key-decisions)
+3. [Architecture Overview](#3-architecture-overview)
+4. [Specification Portfolio](#4-specification-portfolio)
+5. [Build Order — MVP (Days 1–65)](#5-build-order--mvp-days-165)
+6. [V2 Waves (Months 4–8)](#6-v2-waves-months-48)
+7. [Dependency Matrix](#7-dependency-matrix)
+8. [Cross-Cutting Standards](#8-cross-cutting-standards)
+9. [Spec Kit Workflow](#9-spec-kit-workflow)
+10. [Verification Checklist](#10-verification-checklist)
+11. [Files to Create](#11-files-to-create)
+12. [Status Tracking](#12-status-tracking)
 
 ---
 
-## Part 1 -- Program Structure
+## 1. Executive Summary
+
+Waslah AI Revenue Guardian is a **multi-tenant SaaS platform** that helps Arabic-market e-commerce merchants **protect and grow their revenue** through AI-powered WhatsApp sales automation, smart attribution, and margin protection.
+
+### Core Product Rules
+
+- **Revenue-first**: every capability must have a clear relationship to revenue generation, recovery, margin protection, or reliable measurement of those outcomes
+- **Tenancy**: every resource belongs to exactly one Workspace; tenant isolation is enforced at the data layer, not just the API
+- **Attribution**: deterministic only — never delegated to AI; computed by `src/core/attribution.ts`
+- **Money precision**: `Decimal(14,2)` everywhere; half-up rounding at display only
+- **AI cost cap**: hard limit of `$0.05/conversation`; alert fires at `$0.04`
+- **API prefix**: `api.waslah.ai/v1/` — no `/api/` prefix
+- **MVP discipline**: V2 features must never be implemented in MVP specs; scope creep is a constitution violation
+- **V3 out of scope**: Munjiz, Rased, Murshid, Thaqib, native mobile apps, ERP integrations are explicitly deferred
+- **`src/core/**`**: pure, deterministic, I/O-free functions — 100% unit-testable
+- **2FA and team invites**: V2 only; owner-only at MVP
+- **OPEN-xx items**: must not be resolved by implementation agents — escalate to stakeholder
+
+### Reviewed Against
+
+- `Waslah_AI_Revenue_Guardian_SRS.md` (V2.1)
+- `Backend_SRS.md` (v2.2)
+- `Frontend_SRS.md` (v2.2)
+- `Waslah_Feature_List.md`
+- `Waslah_Tech_Stack.md`
+
+
+---
+
+## 2. Key Decisions
+
+Key architectural and scope decisions made during plan review. Each decision is traced to a source.
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Foundation stream naming | `X-00` (not "Phase 0") | Foundation specs are cross-cutting prerequisites, not a numbered phase. `X-00` makes clear they block everything else. |
+| Shared Contracts timing | Phase 0 (before any BE/FE) | Constitution §XI: `shared-types` MUST precede backend and frontend work. Previously misplaced in MVP Hardening. |
+| RBAC data split | DB-02 = MVP user/role/invite tables; DB-09 = V2 team mgmt extensions | Backend SRS requires RBAC data for MVP auth. CRM/team extensions are V2. |
+| BE-16 Media Intelligence | V2 only | NEW-FR-023/024 tagged 🟡 V2 in Feature List. Voice transcription and image recognition are not MVP. |
+| Cross-cutting X-specs timing | Authored in Phase 0, applied from Phase 1 onward | Constitution §IX, §XIII, §XIV: security, reliability, tenant isolation, and testing are first-class from day one — not a final hardening phase. |
+| FE-05 Inbox scope | WhatsApp at MVP; Instagram/Messenger added in V2-E | Feature List and SRS: WhatsApp inbox is an MVP dependency for Wasel. |
+| BE-17 Analytics scope | Thin aggregation layer only | Backend SRS scopes analytics as queue-driven aggregation jobs, not a separate service. |
+| DB-13 Analytics timing | Late V2 (after all domain data is stable) | Analytics snapshots depend on all domain tables existing. |
+| PaymentPlan entity | Schema exists at MVP; V3 behavior only | SRS §09.1: "V3 consumer; model now". `status=DRAFT` convention until Munjiz (V3). |
+| DB-14 AuditLog timing | MVP (not late V2) | NEW-FR-017 + Constitution §VIII: audit logging required from day one. `lib/audit.ts` ships in BE-01. |
+| Phase 3 attribution | BE-08 = Attribution (MAR); BE-09 = Billing (V2) | Billing is V2-D. Attribution is MVP. Previously confused in draft. |
+| Success-fee billing | V2-D only | Feature List tags success-fee billing as 🟡 V2. MVP has manual billing foundations only. |
+| Core business logic | `src/core/**` = pure deterministic functions, zero I/O | Constitution §VII: attribution, margin, fees, billing must be 100% unit-testable. |
+| Margin decisions | `core/marginGuard.ts`, deterministic bands | RES-15: margin decisions must not be AI-delegated. |
+| API prefix | `api.waslah.ai/v1/` | SRS §04 + Constitution §X. No `/api/` prefix. All routes follow this. |
+| Cost price visibility | Owner / Admin / Accountant roles only | NEW-SEC-001: cost price is confidential. Enforced in catalog API and Wasel context assembly. |
+
+---
+
+## 3. Architecture Overview
+
+### System Diagram
 
 ```
-WASLAH IMPLEMENTATION PROGRAM
-|
-+-- X-00  Foundation / Infrastructure (Phase 0 -- blocks everything)
-+-- X-01  Shared Contracts (Phase 0 -- blocks BE + FE)
-|
-+-- DB    Database Specifications (14 specs, MVP + V2 waves)
-+-- BE    Backend Specifications  (19 specs, MVP + V2 waves)
-+-- FE    Frontend Specifications (15 specs, MVP + V2 waves)
-|
-+-- X     Cross-Cutting Standards (7 specs -- authored early, applied throughout)
-    +-- X-02  Testing Strategy
-    +-- X-03  Tenant Isolation
-    +-- X-04  Financial Correctness
-    +-- X-05  AI Safety & Guardrails
-    +-- X-06  Reliability & Idempotency
-    +-- X-07  Performance
-    +-- X-08  Release & Production Readiness
+                    ┌──────────────────────────────────┐
+                    │         Merchant Browser         │
+                    │   Next.js 15 (App Router, RTL)   │
+                    └────────────────┬─────────────────┘
+                                     │ HTTPS
+                                     ▼
+                         ┌───────────────────────┐
+                         │   Vercel (Frontend)   │
+                         │  api.waslah.ai/v1/*   │
+                         └──────────┬────────────┘
+                                    │
+                     ┌──────────────┴──────────────┐
+                     ▼                             ▼
+           ┌─────────────────┐          ┌──────────────────────┐
+           │ Railway Backend │          │   BullMQ Workers     │
+           │  Express + TS   │          │ (attribution, AI      │
+           │  Prisma ORM     │          │  metering, notifs)   │
+           └────────┬────────┘          └──────────┬───────────┘
+                    │                              │
+          ┌─────────┴─────────────────────────────┘
+          ▼
+┌──────────────────────────────────────────────────────┐
+│                    Data Layer                         │
+├────────────────┬──────────────┬──────────────────────┤
+│  PostgreSQL 16 │   Redis 7    │   Cloudinary / S3    │
+│  (Prisma ORM)  │  (BullMQ +   │  (product images,    │
+│  multi-tenant  │   cache)     │   voice attachments) │
+└────────────────┴──────────────┴──────────────────────┘
+          │
+          ▼
+┌──────────────────────────────────────────────────────┐
+│                 External Services                     │
+├──────────────────┬─────────────────┬─────────────────┤
+│  WhatsApp Cloud  │  Gemini /       │  Fawry / COD   │
+│  API (Meta)      │  Anthropic /    │  (payment       │
+│                  │  OpenAI         │   gateway)      │
+├──────────────────┼─────────────────┼─────────────────┤
+│  Shopify /       │  Salla / Zid    │  Bosta / Aramex │
+│  WooCommerce     │  (V2)           │  / SMSA (V2)   │
+└──────────────────┴─────────────────┴─────────────────┘
 ```
 
-**Total portfolio: 57 specifications** (2 foundation + 14 DB + 19 BE + 15 FE + 7 cross-cutting).
+### Technology Stack
 
-Each spec covers a complete capability -- not a single entity, endpoint, or UI component.
+| Layer | Technology | Notes |
+|-------|------------|-------|
+| Frontend | Next.js 15 (App Router) | RTL-first, Arabic + English via `next-intl` |
+| UI Components | shadcn/ui + Radix UI | Design tokens, Waslah palette |
+| State & Data | TanStack Query v5 | Server state; Zustand for UI state |
+| Backend | Express.js + TypeScript | Monorepo: `apps/api` |
+| ORM | Prisma v5 | `prisma/schema.prisma`; `Decimal(14,2)` for money |
+| Database | PostgreSQL 16 | Multi-tenant; `workspaceId` on all domain tables |
+| Queue | BullMQ + Redis 7 | Attribution, AI metering, notifications, webhooks |
+| AI Provider | Gemini / Anthropic Claude / OpenAI (provider-abstracted) | `LLMProvider` interface; mock provider in CI |
+| WhatsApp | Meta Cloud API | Webhook idempotency via `(provider, event_id)` |
+| Payments | Fawry + COD | Additional providers in V2 |
+| Auth | JWT (RS256) + refresh tokens | Workspace context in every middleware call |
+| Hosting (BE) | Railway | Auto-deploy from `main` |
+| Hosting (FE) | Vercel | Edge runtime for dashboard performance |
+| CI/CD | GitHub Actions | Typecheck → lint → test → build → deploy |
+| Observability | Sentry (errors) + structured logs | `requestId` propagation end-to-end |
+| Shared Types | `packages/shared-types` | Zod schemas, TypeScript types, enums |
+
+### Monorepo Structure
+
+```
+waslah/
+├── apps/
+│   ├── api/              # Express API + BullMQ workers
+│   └── web/              # Next.js 15 app
+├── packages/
+│   └── shared-types/     # Zod schemas, TypeScript types, Capability enum
+├── prisma/
+│   └── schema.prisma     # Single schema, multi-tenant
+├── docs/
+│   └── plans/            # This file + individual spec plans
+├── .specify/
+│   └── memory/           # constitution.md, feature specs
+├── .github/
+│   └── workflows/        # CI/CD pipelines
+├── docker-compose.yml    # postgres:16 + redis:7 for local dev
+├── pnpm-workspace.yaml
+└── turbo.json
+```
 
 ---
 
-## Part 2 -- Specification Inventory
+## 4. Specification Portfolio
 
-### Foundation
+**Total: 58 specifications** across 5 streams.
+
+### Foundation (2 specs)
 
 | ID | Name | Phase | Blocks |
-|---|---|---|---|
+|----|------|-------|--------|
 | X-00 | Infrastructure & Repository Foundation | Pre-phase | Everything |
-| X-01 | Shared Contracts (packages/shared-types) | Pre-phase | All BE + FE |
+| X-01 | Shared Contracts (`packages/shared-types`) | Pre-phase | All BE + FE |
 
-### Database Specifications
+### Database (15 specs)
 
 | ID | Name | Phase | Depends on | Blocks |
-|---|---|---|---|---|
-| DB-01 | Core Platform & Multi-Tenancy | MVP | -- | Almost everything |
+|----|------|-------|------------|--------|
+| DB-01 | Core Platform & Multi-Tenancy | MVP | — | Almost everything |
 | DB-02 | Authentication, Sessions & RBAC data | MVP | DB-01 | BE-02, BE-10 |
 | DB-03 | Catalog & Inventory | MVP | DB-01 | BE-03, BE-06 |
 | DB-04 | Customers & Conversations | MVP | DB-01, DB-02 | BE-04, BE-06 |
 | DB-05 | Orders, Invoices & Payments | MVP | DB-03, DB-04 | BE-07 |
 | DB-06 | AI & Agent Execution | MVP | DB-04 | BE-06, BE-08 |
 | DB-07 | Attribution & Revenue | MVP | DB-04, DB-05, DB-06 | BE-08 |
-| DB-08 | Billing & Subscriptions | V2 | DB-07 | BE-09 |
-| DB-09 | V2 Team Management (RBAC extensions) | V2 | DB-01, DB-02, DB-04 | BE-10, BE-11, FE-10 |
-| DB-10 | Aaed / Follow-up | V2 | DB-04, DB-06, DB-07, DB-12 | BE-12 |
-| DB-11 | Hafeth / Margin Guard | V2 | DB-03, DB-05, DB-09 | BE-13 |
+| DB-08 | Billing & Subscriptions | V2-D | DB-07 | BE-09 |
+| DB-09 | V2 Team, RBAC & Conversation Operations | V2-A | DB-01, DB-02, DB-04 | BE-10, BE-14, BE-18, FE-10 |
+| DB-10 | Aaed / Follow-up | V2-B | DB-04, DB-06, DB-07, DB-12 | BE-12 |
+| DB-11 | Hafeth / Margin Guard | V2-C | DB-03, DB-05, DB-09 | BE-13 |
 | DB-12 | Integrations & Template Library | MVP* | DB-01 | BE-05, BE-12, BE-18 |
-| DB-13 | Analytics | V2 | All domain DBs | BE-17 |
-| DB-14 | Audit Log & Retention | **MVP** | DB-01 | BE-01 (lib/audit.ts) |
+| DB-13 | Analytics Snapshots | V2-I | All domain DBs | BE-17 |
+| DB-14 | Audit Log & Retention | **MVP** | DB-01 | BE-01 (`lib/audit.ts`) |
+| DB-15 | Conversation AI State | MVP | DB-04 | DB-06, BE-06 |
 
-> *DB-12 is partially MVP (Integration connection state, webhook dedup records) and partially V2
-> (TemplateMessage library). The DB spec covers both; BE specs gate feature behavior.
+> *DB-12 is partially MVP (Integration connection state, webhook dedup) and partially V2 (TemplateMessage library). BE specs gate feature behavior within the same DB spec.
 
-### Backend Specifications
+### Backend (19 specs)
 
 | ID | Name | Phase | Depends on |
-|---|---|---|---|
-| BE-01 | API Foundation (Express, middleware, conventions, observability) | MVP | X-00, X-01, DB-14, DB-01 |
+|----|------|-------|------------|
+| BE-01 | API Foundation (Express, middleware, observability, lib utilities) | MVP | X-00, X-01, DB-01, DB-14 |
 | BE-02 | Authentication & Workspace | MVP | BE-01, DB-01, DB-02 |
 | BE-03 | Catalog | MVP | BE-01, BE-02, DB-03 |
 | BE-04 | Customers & Conversations | MVP | BE-01, BE-02, DB-04 |
@@ -110,279 +216,256 @@ Each spec covers a complete capability -- not a single entity, endpoint, or UI c
 | BE-06 | Wasel AI (Sales Closer) | MVP | BE-01, BE-03, BE-04, BE-05, DB-06 |
 | BE-07 | Orders, Invoices & Payments | MVP | BE-01, BE-03, BE-04, DB-05 |
 | BE-08 | Attribution & Revenue | MVP | BE-06, BE-07, DB-07 |
-| BE-09 | Billing & Subscriptions | V2 | BE-08, DB-08 |
-| BE-10 | RBAC & Team Management | V2 | BE-02, DB-09 |
-| BE-11 | Instagram & Facebook Messenger | V2 | BE-01, BE-04, DB-12 |
-| BE-12 | Aaed (Follow-up & Recovery) | V2 | BE-04, BE-06, BE-08, DB-10 |
-| BE-13 | Hafeth (Margin Guard) | V2 | BE-07, DB-11 |
-| BE-14 | CRM (Profiles, Notes, Segments) | V2 | BE-04, DB-09 |
-| BE-15 | Salla & Zid Commerce Sync | V2 | BE-03, BE-07, DB-12 |
-| BE-16 | Media Intelligence (Voice & Image) | V2 | BE-05, BE-06, DB-06 |
-| BE-17 | Analytics API & Aggregation | V2 | BE-08, BE-09, DB-13 |
-| BE-18 | Notifications & Template Library | V2* | BE-01, DB-04, DB-12 |
-| BE-19 | Shipping Integrations (Bosta/Aramex/SMSA) | V2 | BE-07, BE-08, DB-12 |
+| BE-09 | Billing & Subscriptions | V2-D | BE-08, DB-08 |
+| BE-10 | RBAC & Team Management | V2-A | BE-02, DB-09 |
+| BE-11 | Instagram & Facebook Messenger | V2-E | BE-01, BE-04, DB-12 |
+| BE-12 | Aaed (Follow-up & Recovery) | V2-B | BE-04, BE-06, BE-08, DB-10 |
+| BE-13 | Hafeth (Margin Guard) | V2-C | BE-07, DB-11 |
+| BE-14 | CRM (Profiles, Notes, Segments) | V2-F | BE-04, DB-09 |
+| BE-15 | Salla & Zid Commerce Sync | V2-G | BE-03, BE-07, DB-12 |
+| BE-16 | Media Intelligence (Voice & Image) | V2-H | BE-05, BE-06, DB-06 |
+| BE-17 | Analytics API & Aggregation | V2-I | BE-08, BE-09, DB-13 |
+| BE-18 | Notifications & Template Library | V2-E* | BE-01, DB-04, DB-12 |
+| BE-19 | Shipping Integrations (Bosta/Aramex/SMSA) | V2-J | BE-07, BE-08, DB-12 |
 
-> *BE-18 Notifications is partially MVP (basic in-app/email alerts) and partially V2 (WhatsApp
-> template library, approval state). MVP delivers minimal notification infrastructure; V2 delivers
-> the full template management UI.
+> *BE-18 is partially MVP (basic in-app/email alerts) and partially V2 (WhatsApp template library management).
 
-### Frontend Specifications
+### Frontend (15 specs)
 
 | ID | Name | Phase | Depends on |
-|---|---|---|---|
+|----|------|-------|------------|
 | FE-01 | Frontend Foundation (App Router, design system, RTL, i18n, API client) | MVP | X-00, X-01 |
 | FE-02 | Authentication & Onboarding | MVP | FE-01, BE-02 |
-| FE-03 | Owner Dashboard | MVP | FE-01, BE-08 (MVP attribution API) |
+| FE-03 | Owner Dashboard | MVP | FE-01, BE-08 |
 | FE-04 | Product Catalog | MVP | FE-01, BE-03 |
-| FE-05 | Unified Inbox (WhatsApp MVP -> IG/Messenger V2) | MVP | FE-01, BE-04, BE-05 |
-| FE-06 | Customer Profile | V2 | FE-01, BE-14 |
+| FE-05 | Unified Inbox (WhatsApp MVP → IG/Messenger V2) | MVP | FE-01, BE-04, BE-05 |
+| FE-06 | Customer Profile | V2-F | FE-01, BE-14 |
 | FE-07 | Orders & Payments | MVP | FE-01, BE-07 |
-| FE-08 | Revenue Analytics | MVP (basic) / V2 (full) | FE-01, BE-08, BE-17 |
-| FE-09 | Integrations Hub | MVP (WA/Shopify) / V2 (Salla/Zid/IG/Messenger) | FE-01, BE-05, BE-11, BE-15 |
-| FE-10 | Team & RBAC | V2 | FE-01, BE-10 |
-| FE-11 | Aaed Dashboard | V2 | FE-01, BE-12 |
-| FE-12 | Hafeth Margin Guard | V2 | FE-01, BE-13 |
-| FE-13 | Billing & Subscription | V2 | FE-01, BE-09 |
-| FE-14 | CRM | V2 | FE-01, FE-06, BE-14 |
+| FE-08 | Revenue Analytics | MVP (basic) / V2-I (full) | FE-01, BE-08, BE-17 |
+| FE-09 | Integrations Hub | MVP (WA/Shopify) / V2 (Salla/Zid/IG) | FE-01, BE-05, BE-11, BE-15 |
+| FE-10 | Team & RBAC | V2-A | FE-01, BE-10 |
+| FE-11 | Aaed Dashboard | V2-B | FE-01, BE-12 |
+| FE-12 | Hafeth Margin Guard | V2-C | FE-01, BE-13 |
+| FE-13 | Billing & Subscription | V2-D | FE-01, BE-09 |
+| FE-14 | CRM | V2-F | FE-01, FE-06, BE-14 |
 | FE-15 | Settings & Administration | MVP (basic) / V2 (full) | FE-01, BE-02, BE-18 |
 
-### Cross-Cutting Specifications
+### Cross-Cutting Standards (7 specs)
 
-| ID | Name | When authored | Scope |
-|---|---|---|---|
-| X-02 | Testing Strategy | Phase 0 | Applies to all specs from Phase 1 onward |
-| X-03 | Tenant Isolation | Phase 0 | DB + BE mandatory compliance checklist |
-| X-04 | Financial Correctness | Phase 0 | Attribution, fees, money precision, rounding |
-| X-05 | AI Safety & Guardrails | Phase 0 | Grounding, confidence, cost cap, auditability |
+| ID | Name | Authored | Applies to |
+|----|------|----------|------------|
+| X-02 | Testing Strategy | Phase 0 | All specs Phase 1 onward |
+| X-03 | Tenant Isolation | Phase 0 | All DB + BE specs |
+| X-04 | Financial Correctness | Phase 0 | Attribution, fees, money ops |
+| X-05 | AI Safety & Guardrails | Phase 0 | Wasel, Aaed, any LLM caller |
 | X-06 | Reliability & Idempotency | Phase 0 | Webhooks, queues, retries, DLQ |
-| X-07 | Performance | Before MVP pilot | NFR targets from NEW-NFR-005 as acceptance criteria |
-| X-08 | Release & Production Readiness | Before MVP pilot | Infra, secrets, alerting, runbooks, pilot checklist |
+| X-07 | Performance | Before MVP pilot | NFR targets from NEW-NFR-005 |
+| X-08 | Release & Production Readiness | Before MVP pilot | Infra, secrets, alerting, runbooks |
 
-> **Important:** X-02 through X-06 are authored in Phase 0 and become mandatory compliance
-> references for every downstream spec. They do not block spec authoring, but they DO block
-> implementation sign-off. Waiving a cross-cutting requirement requires a documented scope decision.
+> X-02 through X-06 are authored in Phase 0 and become mandatory compliance references for every downstream spec. They do not block spec authoring, but they **do block implementation sign-off**. Waiving any cross-cutting requirement requires a documented scope decision with a spec ID.
 
 ---
 
-## Part 3 -- Build Phases
+## 5. Build Order — MVP (Days 1–65)
 
-### Phase 0 -- Foundation (Days 1-5)
-**Goal:** Repository, infra, shared contracts, and cross-cutting standards authored.
-**Gate:** Developer can boot the monorepo; CI passes; shared-types package builds; DB migrates.
+### Phase 0 — Foundation (Days 1–5)
 
-| Spec | Output |
-|---|---|
-| X-00 | Monorepo (pnpm/Turborepo), Docker Compose (postgres:16, redis:7), GitHub Actions CI, Railway config |
-| X-01 | packages/shared-types: Zod schemas, TypeScript types, Capability enum, enums, pagination types |
-| X-02..X-06 | Cross-cutting standards docs (authored concurrently, compliance enforced from Phase 1) |
-| DB-14 | AuditLog schema (append-only, immutable), retention metadata |
-| DB-01 | Workspace, WorkspaceSettings -- the tenancy root |
+**Goal:** Monorepo boots, CI passes, shared-types build succeeds, DB migrates, cross-cutting standards authored.
 
-**Parallel:** FE-01 can begin (Next.js scaffold, RTL/i18n, design system) once X-00 and X-01 are done.
+| Task | Spec | Deliverable |
+|------|------|-------------|
+| 0.1 | X-00 | pnpm monorepo scaffold (Turborepo) |
+| 0.2 | X-00 | Docker Compose: `postgres:16` + `redis:7` |
+| 0.3 | X-00 | GitHub Actions CI: typecheck → lint → test → build |
+| 0.4 | X-00 | Railway + Vercel project config |
+| 0.5 | X-01 | `packages/shared-types`: Capability enum, Zod schemas, pagination types, money types |
+| 0.6 | X-02 | Testing strategy doc (unit / integration / E2E layers, coverage gates, mock LLM provider) |
+| 0.7 | X-03 | Tenant isolation standard: mandatory `workspaceId` filter checklist for all BE specs |
+| 0.8 | X-04 | Financial correctness standard: money ops guide, `Decimal(14,2)` convention, rounding rules |
+| 0.9 | X-05 | AI guardrail standard: grounding rules, confidence levels, cost cap enforcement, audit requirements |
+| 0.10 | X-06 | Reliability standard: idempotency key patterns, DLQ requirements, retry policy |
+| 0.11 | DB-01 | `Workspace`, `WorkspaceSettings` — tenancy root; Prisma migration `0001_core_tenancy` |
+| 0.12 | DB-14 | `AuditLog` schema (append-only, immutable), retention metadata |
 
----
+**Checkpoint**: `pnpm dev` boots both apps locally. `pnpm test` passes. `pnpm db:migrate` applies migrations. `shared-types` package builds and is importable.
 
-### Phase 1 -- Platform Core (Days 6-15)
-**Goal:** Merchant can register -> create workspace -> log in -> reach the application shell.
-**Gate:** Auth roundtrip works; workspace context enforced; CI green on tenant isolation tests.
-
-| Spec | Output |
-|---|---|
-| DB-02 | User, Session, WorkspaceUser, WorkspaceRole -- auth + RBAC data foundation |
-| DB-03 | Product, ProductVariant, Category, InventoryLog -- catalog schema |
-| DB-04 | Customer, Conversation, Message, MessageAttachment -- core conversation data |
-| DB-12 | Integration, WebhookEvent (dedup key) -- integration connection state (MVP portion) |
-| BE-01 | Express app, middleware, error handling, response envelope, lib/audit.ts, lib/money.ts, lib/idempotency.ts, lib/rbac.ts |
-| BE-02 | Registration, login, JWT, workspace creation, tenant context middleware |
-| FE-01 | Next.js 15 app, RTL/next-intl, design tokens, shadcn/ui primitives, TanStack Query client, auth store |
-| FE-02 | Login, registration, workspace creation wizard (MVP: owner-only; V2 team invite step hidden) |
+**Parallel:** FE-01 can begin once X-00 and X-01 are complete.
 
 ---
 
-### Phase 2 -- Commerce Foundation (Days 16-30)
-**Goal:** Merchant can manage catalog, receive WhatsApp messages, create orders, and process a payment.
-**Gate:** End-to-end: catalog product -> WhatsApp message -> order created -> payment link -> paid.
+### Phase 1 — Platform Core (Days 6–15)
 
-| Spec | Output |
-|---|---|
-| DB-05 | Order, OrderItem, Invoice, Payment, Refund, PaymentPlan (schema-only, V3 behavior) |
-| BE-03 | Catalog CRUD, variants, inventory, CSV import, Shopify/WooCommerce sync |
-| BE-04 | Conversation ingest, message store, assignment foundation, human takeover |
-| BE-05 | WhatsApp webhook (idempotent), inbound/outbound, delivery status, retry/DLQ |
-| BE-07 | Order/invoice creation, state machine, Fawry/COD payment links, payment webhook processing |
-| FE-04 | Product list, search/filter, product form, variants, inventory, import |
-| FE-05 | Conversation list + thread (MVP: WhatsApp only), human takeover, composer |
-| FE-07 | Order list, order detail, invoice, payment status, COD state |
-| FE-09 | Integrations hub -- WhatsApp connect, Shopify/WooCommerce (MVP scope only) |
-| FE-15 | Settings shell -- workspace profile, locale, currency, basic AI config (MVP) |
+**Goal:** Merchant registers → creates workspace → logs in → reaches application shell.
 
----
+| Task | Spec | Deliverable |
+|------|------|-------------|
+| 1.1 | DB-02 | `User`, `Session`, `WorkspaceUser`, `WorkspaceRole` migration |
+| 1.2 | DB-03 | `Product`, `ProductVariant`, `Category`, `InventoryLog` migration |
+| 1.3 | DB-04 | `Customer`, `Conversation`, `Message`, `MessageAttachment` migration |
+| 1.3b | DB-15 | `ConversationState` migration (1:1 with Conversation: intent, stage, confidence, escalation_reason, ai_summary, sentiment, next_best_action) |
+| 1.4 | DB-12 | `Integration`, `WebhookEvent` (dedup key) migration (MVP portion) |
+| 1.5 | BE-01 | Express app + middleware stack: `requestId`, `tenantContext`, error handler, response envelope |
+| 1.6 | BE-01 | `lib/audit.ts` (append-only write to AuditLog, no reads) |
+| 1.7 | BE-01 | `lib/money.ts` (Decimal(14,2) operations, half-up rounding) |
+| 1.8 | BE-01 | `lib/idempotency.ts` (key pattern, Redis lock) |
+| 1.9 | BE-01 | `lib/rbac.ts` (role check functions, capability map) |
+| 1.10 | BE-02 | Registration, login, JWT (RS256) + refresh, logout |
+| 1.11 | BE-02 | Workspace creation, tenant context middleware |
+| 1.12 | FE-01 | Next.js 15 scaffold, `next-intl` RTL config (Arabic + English) |
+| 1.13 | FE-01 | Design token system, shadcn/ui primitives, Waslah palette |
+| 1.14 | FE-01 | TanStack Query client, API client wrapper, auth store (Zustand) |
+| 1.15 | FE-02 | Login page, registration page |
+| 1.16 | FE-02 | Workspace creation wizard (owner-only; team invite step hidden until V2-A) |
 
-### Phase 3 -- Wasel Revenue Loop (Days 31-50)
-**Goal:** WhatsApp -> Wasel -> catalog -> conversation -> order -> payment -> attribution -> MAR.
-**Gate:** At least one end-to-end conversation showing attributed revenue in the dashboard.
-
-| Spec | Output |
-|---|---|
-| DB-06 | AgentConfig, LLMCall, ToolExecution -- AI execution tracking |
-| DB-07 | AttributionEvent -- immutable, reversible, with reversal chain |
-| BE-06 | Wasel: intent classification, context assembly, catalog RAG retrieval, response generation, confidence tiers, cost metering, guardrails (no cost disclosure, no hallucinated catalog, margin compliance) |
-| BE-08 | Attribution engine (core/attribution.ts), MAR computation, COD attribution on delivery confirmation, reversal on refund, first-touch default, audit logging |
-| FE-03 | Owner dashboard -- MAR card, Revenue Recovered, conversations card, margin guard card, quick actions, real-time WS updates |
-| FE-08 | Analytics -- MVP: MAR chart, basic conversation metrics, AI resolution rate, response time |
-
-**MVP pilot readiness gate:**
-- Wasel handles a real conversation autonomously
-- Attribution event created for a paid order
-- MAR appears on owner dashboard
-- Human can take over at any point
-- AI cost stays under $0.05/conversation
-- Tenant A cannot see Tenant B data
+**Checkpoint**: Auth roundtrip works end-to-end. Workspace context enforced on every protected route. CI green on tenant isolation unit tests.
 
 ---
 
-### Phase 4 -- MVP Hardening (Days 51-65)
+### Phase 2 — Commerce Foundation (Days 16–30)
+
+**Goal:** Merchant manages catalog → receives WhatsApp message → creates order → processes payment.
+
+| Task | Spec | Deliverable |
+|------|------|-------------|
+| 2.1 | DB-05 | `Order`, `OrderItem`, `Invoice`, `Payment`, `Refund` migration; `PaymentPlan` schema-only (V3 behavior) |
+| 2.2 | BE-03 | Catalog CRUD: product create/read/update/delete, variants, categories |
+| 2.3 | BE-03 | Inventory log, CSV import, Shopify/WooCommerce sync (MVP scope) |
+| 2.4 | BE-04 | Conversation ingest, message persistence, assignment foundation, human takeover flag |
+| 2.5 | BE-05 | WhatsApp webhook (idempotent by `event_id`), inbound/outbound message delivery |
+| 2.6 | BE-05 | WhatsApp delivery status, retry queue, DLQ |
+| 2.7 | BE-07 | Order state machine: draft → confirmed → shipped → delivered → cancelled |
+| 2.8 | BE-07 | Invoice creation, Fawry payment link, COD order creation, payment webhook |
+| 2.9 | FE-04 | Product list (search, filter, sort), product form, variants, inventory view, CSV import UI |
+| 2.10 | FE-05 | Conversation list + thread view (WhatsApp only at MVP), human takeover toggle, composer |
+| 2.11 | FE-07 | Order list, order detail, invoice view, payment status, COD state management |
+| 2.12 | FE-09 | Integrations hub: WhatsApp connect, Shopify/WooCommerce (MVP scope only) |
+| 2.13 | FE-15 | Settings shell: workspace profile, locale, currency, basic AI config (owner-only) |
+
+**Checkpoint**: End-to-end trace: catalog product → WhatsApp message received → order created → Fawry payment link sent → payment confirmed. Webhook idempotency verified by replaying same event twice.
+
+---
+
+### Phase 3 — Wasel Revenue Loop (Days 31–50)
+
+**Goal:** WhatsApp → Wasel AI → catalog → conversation → order → payment → attribution → MAR on dashboard.
+
+| Task | Spec | Deliverable |
+|------|------|-------------|
+| 3.1 | DB-06 | `AgentConfig`, `LLMCall`, `ToolExecution` migration |
+| 3.2 | DB-07 | `AttributionEvent` migration (append-only, reversal chain) |
+| 3.3 | BE-06 | `core/wasel.ts`: intent classification, confidence tiers (HIGH/MEDIUM/LOW/REFUSE) |
+| 3.4 | BE-06 | Catalog RAG retrieval (vector similarity via pgvector) |
+| 3.5 | BE-06 | Response generation: brand context assembly, guardrails (no cost disclosure, no hallucinated catalog) |
+| 3.6 | BE-06 | AI cost metering: `LLMCall` insert per request; alert at $0.04; hard-stop at $0.05 |
+| 3.7 | BE-08 | `core/attribution.ts`: first-touch attribution, MAR computation |
+| 3.8 | BE-08 | Attribution event on order payment confirmation |
+| 3.9 | BE-08 | COD attribution on delivery confirmation webhook |
+| 3.10 | BE-08 | Reversal on refund (immutable ledger + reversal record) |
+| 3.11 | FE-03 | Owner dashboard: MAR card, Revenue Recovered card, Conversations card, Margin Guard card |
+| 3.12 | FE-03 | Real-time WebSocket updates for dashboard metrics |
+| 3.13 | FE-03 | Quick actions: create order, open conversation |
+| 3.14 | FE-08 | Analytics MVP: MAR trend chart, AI resolution rate, avg response time, active conversations |
+
+**Checkpoint (MVP Pilot Readiness)**:
+- Wasel handles a real WhatsApp conversation autonomously ✓
+- Attribution event created and persisted for a paid order ✓
+- MAR card shows correct value on owner dashboard ✓
+- Human can take over at any point without data loss ✓
+- AI cost stays under $0.05/conversation (metered) ✓
+- Tenant A cannot read Tenant B's data (X-03 audit) ✓
+- All `src/core/**` functions have ≥90% coverage ✓
+
+---
+
+### Phase 4 — MVP Hardening (Days 51–65)
+
 **Goal:** Production-ready MVP. Pilot merchants can onboard safely.
-**Gate:** All X-spec compliance checklists pass; performance targets met; security review complete.
 
-| Activity | Output |
-|---|---|
-| X-07 | Performance acceptance: AI first-byte <3s, dashboard <2s, API p95 <500ms |
-| X-08 | Production readiness: Railway deploy, Vercel deploy, Sentry configured, secrets in env, runbooks |
-| X-03 compliance | Tenant isolation audit across all Phase 1-3 specs |
-| X-04 compliance | Financial correctness audit: attribution math, money precision, state machines |
-| X-05 compliance | AI guardrail audit: confidence levels, cost cap enforcement, grounding checks |
-| X-06 compliance | Reliability audit: webhook idempotency verified, DLQ wired, retry policies tested |
-| X-02 completion | >=90% coverage on src/core/**; integration tests for revenue loop; E2E for auth + attribution |
+| Task | Spec | Deliverable |
+|------|------|-------------|
+| 4.1 | X-07 | Performance acceptance: AI first-byte `<3s`, dashboard load `<2s`, API p95 `<500ms` |
+| 4.2 | X-08 | Railway production deploy, Vercel production deploy |
+| 4.3 | X-08 | Sentry configured (errors + performance), structured log shipping |
+| 4.4 | X-08 | Secrets in Railway env (no secrets in codebase), runbooks written |
+| 4.5 | X-03 | Tenant isolation audit: verify `workspaceId` filter on every Prisma query across Phase 1–3 specs |
+| 4.6 | X-04 | Financial correctness audit: attribution math, money precision, state machine transitions |
+| 4.7 | X-05 | AI guardrail audit: confidence levels enforced, cost cap tested, grounding verified |
+| 4.8 | X-06 | Reliability audit: webhook idempotency proven, DLQ connected, retry policies tested |
+| 4.9 | X-02 | Final coverage check: ≥90% on `src/core/**`; integration test for full revenue loop; E2E for auth + order + attribution |
 
----
-
-## Part 4 -- V2 Waves (Months 4-8)
-
-> V2 gates: MVP Revenue Loop is stable; at least one pilot merchant is live.
-
-### Wave V2-A -- Team Foundation
-```
-DB-09 -> BE-10 -> FE-10
-```
-RBAC roles, invitations, conversation assignment/ownership.
-Gate: Agents can claim conversations; Manager can reassign; RBAC enforced server-side.
-
-### Wave V2-B -- Aaed Follow-up & Recovery
-```
-DB-10 -> BE-12 -> FE-11
-```
-Abandonment detection, follow-up cadence (RES-05), outcome tracking.
-Requires: DB-12 TemplateMessage library; BE-18 (template portion).
-Gate: Aaed respects 48h min interval + 3-attempt cap; attribution recorded for recoveries.
-
-### Wave V2-C -- Hafeth Margin Guard
-```
-DB-11 -> BE-13 -> FE-12
-```
-Margin rule engine (core/marginGuard.ts), exception workflow, owner approval via WS + FCM push.
-Gate: All RES-15 decision bands tested; 1h auto-reject functional; MarginDecision audit log complete.
-
-### Wave V2-D -- Billing Automation
-```
-DB-08 -> BE-09 -> FE-13
-```
-Subscription lifecycle (RES-20), usage counter, overage policy (RES-16), success-fee engine (core/fees.ts), dispute hold (RES-09).
-Note: VAT (NEW-FR-013) depends on OPEN-02 stakeholder resolution before implementation.
-Gate: Fee recomputed from AttributionEvent ledger; state machine tests pass; dispute hold functional.
-
-### Wave V2-E -- Multi-Channel (Instagram + Messenger)
-```
-DB-12 (TemplateMessage) -> BE-11 -> FE-05 (enhanced) -> FE-09 (enhanced)
-BE-18 (Notifications + Template Library)
-```
-Instagram DM, Facebook Messenger adapters (NEW-FR-022).
-WhatsApp template library management (NEW-FR-019).
-Gate: Round-trip message in sandbox; rate-limit handling; delivery receipt.
-
-### Wave V2-F -- CRM & Customer Intelligence
-```
-DB-09 (CRM extensions) -> BE-14 -> FE-06 -> FE-14
-```
-Customer profiles, notes, segments, auto-segmentation (core/segmentation.ts).
-Gate: Auto-segment computed on sample data; customer LTV/AOV displayed.
-
-### Wave V2-G -- Salla/Zid Commerce Integrations
-```
-BE-15 -> FE-09 (Salla/Zid)
-```
-OAuth connect, bidirectional sync, conflict log, manual resolution UI (NEW-FR-029).
-COMPETITIVE URGENCY: Submit Salla App Store listing before Salla ships native AI.
-Gate: Bidirectional sync tested; conflict detection functional; sync status visible.
-
-### Wave V2-H -- Media Intelligence
-```
-BE-16 -> BE-06 (enriched) -> FE-05 (voice/image UI)
-```
-Voice transcription (Arabic/EN/Arabizi), image-to-catalog matching (NEW-FR-023/024).
-Provider-abstracted; mock provider in CI.
-Gate: Voice transcript injected as VOICE message; image match returns grounded product.
-
-### Wave V2-I -- Analytics
-```
-DB-13 -> BE-17 -> FE-08 (V2 full)
-```
-Revenue by agent/channel/product/segment; margin dashboard; AI cost tracker; NRR + plan upgrade trend.
-Platform Health tab: MAR vs target, churn, NRR, AI cost/conversation.
-Gate: All Financial Model KPI targets surfaced; exports functional.
-
-### Wave V2-J -- Shipping Integrations
-```
-BE-19 -> BE-08 (enriched)
-```
-Bosta/Aramex/SMSA delivery webhooks -> COD attribution trigger (NEW-FR-011, RES-17).
-Gate: COD attribution event fires on delivery confirmation; 7-day reversal window starts correctly.
-
-### Wave V2-K -- Final Hardening
-```
-DB-14 (retention schedules) -> X-02 -> X-03 -> X-04 -> X-05 -> X-06 -> X-07 -> X-08
-```
-Audit log compliance, retention policy enforcement, performance re-validation at V2 load.
-V2 pilot readiness: 650-merchant capacity, Sentry fully wired, Railway autoscale configured.
+**Checkpoint**: All X-spec compliance checklists pass. Pilot merchant can complete registration → first attributed sale without engineering support.
 
 ---
 
-## Part 5 -- Specification Template (Required Fields)
+## 6. V2 Waves (Months 4–8)
 
-Every spec MUST declare these fields when authored via /speckit-specify:
+> **V2 Gate**: MVP Revenue Loop is stable and at least one pilot merchant is live.
 
-| Field | Value |
-|---|---|
-| Spec ID | BE-xx / DB-xx / FE-xx / X-xx |
-| Name | Human-readable name |
-| Phase | MVP / V2 (Wave V2-x) |
-| Status | Draft / In Review / Approved / In Implementation / Complete |
-| Depends on | Comma-separated spec IDs |
-| Blocks | Comma-separated spec IDs |
-| SRS references | NEW-FR-xxx, RES-xx, BR-xxx |
-| Constitution principles | e.g., III, IV, VII |
+> **Execution rule**: V2 waves are strictly sequential. Complete one wave (all specs `Complete`) before starting the next.
 
-**Required sections in every spec:**
-1. Purpose & scope
-2. Out of scope (explicit -- constitution XVI MVP Discipline)
-3. SRS requirements covered (with IDs)
-4. Domain entities touched
-5. Business rules (deterministic)
-6. API surface (if BE) or screen inventory (if FE) or schema additions (if DB)
-7. Queue jobs / events (if applicable)
-8. Security & tenant isolation notes (X-03 compliance)
-9. Financial correctness notes (X-04 compliance, if financial)
-10. AI guardrail notes (X-05 compliance, if AI)
-11. Testing requirements (X-02 compliance)
-12. Acceptance criteria (testable, per SRS)
+### Wave V2-A — Team Foundation
+**Dependency chain**: `DB-09 → BE-10 → FE-10`
+RBAC roles (Owner / Admin / Agent / Accountant), invitations, conversation assignment, labels, auto-assignment rules, escalation rules.
+**Gate**: Agents can claim conversations; Manager can reassign; RBAC enforced server-side; invitation email delivered; labels and assignment rules functional.
+
+### Wave V2-B — Aaed Follow-up & Recovery
+**Dependency chain**: `DB-10 → BE-12 → FE-11`
+Abandonment detection, follow-up cadence (RES-05: 48h min interval, 3-attempt cap), recovery attribution.
+Requires DB-12 TemplateMessage library (from BE-18 template portion).
+**Gate**: Aaed respects cadence rules; attribution recorded for recoveries; opt-out persisted.
+
+### Wave V2-C — Hafeth Margin Guard
+**Dependency chain**: `DB-11 → BE-13 → FE-12`
+`core/marginGuard.ts` deterministic band evaluation, exception workflow, owner approval via WebSocket + FCM push, 1-hour auto-reject.
+**Gate**: All RES-15 decision bands tested; 1h auto-reject functional; `MarginDecision` in AuditLog.
+
+### Wave V2-D — Billing Automation
+**Dependency chain**: `DB-08 → BE-09 → FE-13`
+Subscription lifecycle (RES-20), usage counter, overage policy (RES-16), `core/fees.ts` success-fee engine, dispute hold (RES-09).
+**Note**: VAT (NEW-FR-013) blocked by OPEN-02 — do not implement until stakeholder resolves.
+**Gate**: Fee recomputed from `AttributionEvent` ledger; state machine tests pass; dispute hold functional.
+
+### Wave V2-E — Multi-Channel (Instagram + Messenger)
+**Dependency chain**: `DB-12 (TemplateMessage) → BE-11 + BE-18 → FE-05 (enhanced) + FE-09 (enhanced)`
+Instagram DM + Facebook Messenger adapters (NEW-FR-022), WhatsApp template library management (NEW-FR-019).
+**Gate**: Round-trip message in sandbox; rate-limit handling; delivery receipt; template approval state machine.
+
+### Wave V2-F — CRM & Customer Intelligence
+**Dependency chain**: `DB-09 (CRM ext) → BE-14 → FE-06 → FE-14`
+Customer profiles, notes, segments, `core/segmentation.ts` auto-segmentation.
+**Gate**: Auto-segment computed on sample data; customer LTV/AOV shown; segment used in Aaed cadence.
+
+### Wave V2-G — Salla/Zid Commerce Integrations
+**Dependency chain**: `BE-15 → FE-09 (Salla/Zid panels)`
+OAuth connect, bidirectional product/order sync, conflict log, manual resolution UI (NEW-FR-029).
+**Competitive urgency**: Submit Salla App Store listing before Salla ships native AI chat.
+**Gate**: Bidirectional sync tested; conflict detection functional; sync status surfaced in FE-09.
+
+### Wave V2-H — Media Intelligence
+**Dependency chain**: `BE-16 → BE-06 (enriched) → FE-05 (voice/image UI)`
+Voice transcription (Arabic / EN / Arabizi), image-to-catalog matching (NEW-FR-023/024). Provider-abstracted; mock provider in CI.
+**Gate**: Voice transcript injected as `VOICE` message type; image match returns grounded product above threshold.
+
+### Wave V2-I — Analytics
+**Dependency chain**: `DB-13 → BE-17 → FE-08 (V2 full)`
+Revenue by agent / channel / product / segment; margin dashboard; AI cost/conversation tracker; NRR + plan upgrade trend; Platform Health tab.
+**Gate**: All Financial Model KPI targets surfaced in UI; CSV export functional.
+
+### Wave V2-J — Shipping Integrations
+**Dependency chain**: `BE-19 → BE-08 (enriched)`
+Bosta / Aramex / SMSA delivery webhooks → COD attribution trigger (NEW-FR-011, RES-17). 7-day reversal window on delivery confirmation.
+**Gate**: COD attribution event fires on delivery confirmation; reversal fires on non-delivery.
+
+### Wave V2-K — Final Hardening
+Audit log retention schedules, performance re-validation at V2 load (650-merchant capacity), Sentry fully wired, Railway autoscale configured, V2 pilot readiness checklist.
 
 ---
 
-## Part 6 -- Dependency Matrix (Quick Reference)
+## 7. Dependency Matrix
 
 | Spec | Depends on | Blocked by start of |
-|---|---|---|
-| DB-01 | -- | DB-02, DB-03, DB-04, DB-12, BE-01 |
+|------|------------|---------------------|
+| DB-01 | — | DB-02, DB-03, DB-04, DB-12, BE-01 |
 | DB-02 | DB-01 | DB-09, BE-02, BE-10 |
 | DB-03 | DB-01 | DB-05, DB-11, BE-03 |
 | DB-04 | DB-01, DB-02 | DB-05, DB-06, DB-10, BE-04 |
@@ -390,14 +473,15 @@ Every spec MUST declare these fields when authored via /speckit-specify:
 | DB-06 | DB-04 | DB-07, BE-06 |
 | DB-07 | DB-04, DB-05, DB-06 | DB-08, BE-08 |
 | DB-08 | DB-07 | BE-09 |
-| DB-09 | DB-01, DB-02, DB-04 | BE-10, BE-14 |
+| DB-09 | DB-01, DB-02, DB-04 | BE-10, BE-14, BE-18 |
 | DB-10 | DB-04, DB-06, DB-07, DB-12 | BE-12 |
 | DB-11 | DB-03, DB-05, DB-09 | BE-13 |
 | DB-12 | DB-01 | BE-05, BE-11, BE-12, BE-18 |
 | DB-13 | All domain DBs | BE-17 |
 | DB-14 | DB-01 | BE-01 |
-| BE-01 | X-00, X-01, DB-14, DB-01 | All BE specs |
-| BE-02 | BE-01, DB-02 | BE-03..BE-19 |
+| DB-15 | DB-04 | DB-06, BE-06 |
+| BE-01 | X-00, X-01, DB-01, DB-14 | All BE specs |
+| BE-02 | BE-01, DB-02 | BE-03 through BE-19 |
 | BE-03 | BE-01, BE-02, DB-03 | BE-06, BE-15 |
 | BE-04 | BE-01, BE-02, DB-04 | BE-05, BE-06, BE-12, BE-14 |
 | BE-05 | BE-01, BE-02, DB-04, DB-12 | BE-06 |
@@ -414,68 +498,302 @@ Every spec MUST declare these fields when authored via /speckit-specify:
 | BE-16 | BE-05, BE-06, DB-06 | FE-05 (voice/image) |
 | BE-17 | BE-08, BE-09, DB-13 | FE-08 (V2 full) |
 | BE-18 | BE-01, DB-04, DB-12 | FE-11, FE-12, FE-15 |
-| BE-19 | BE-07, BE-08, DB-12 | FE-09 (shipping status) |
+| BE-19 | BE-07, BE-08, DB-12 | FE-09 (shipping) |
 | FE-01 | X-00, X-01 | All FE specs |
-| FE-02 | FE-01, BE-02 | FE-03..FE-15 |
-| FE-03 | FE-01, BE-08 | -- |
-| FE-04 | FE-01, BE-03 | -- |
-| FE-05 | FE-01, BE-04, BE-05 | -- |
+| FE-02 | FE-01, BE-02 | FE-03 through FE-15 |
+| FE-03 | FE-01, BE-08 | — |
+| FE-04 | FE-01, BE-03 | — |
+| FE-05 | FE-01, BE-04, BE-05 | — |
 | FE-06 | FE-01, BE-14 | FE-14 |
-| FE-07 | FE-01, BE-07 | -- |
-| FE-08 | FE-01, BE-08 (MVP), BE-17 (V2) | -- |
-| FE-09 | FE-01, BE-05, BE-11, BE-15 | -- |
-| FE-10 | FE-01, BE-10 | -- |
-| FE-11 | FE-01, BE-12 | -- |
-| FE-12 | FE-01, BE-13 | -- |
-| FE-13 | FE-01, BE-09 | -- |
-| FE-14 | FE-01, FE-06, BE-14 | -- |
-| FE-15 | FE-01, BE-02, BE-18 | -- |
+| FE-07 | FE-01, BE-07 | — |
+| FE-08 | FE-01, BE-08 (MVP), BE-17 (V2) | — |
+| FE-09 | FE-01, BE-05, BE-11, BE-15 | — |
+| FE-10 | FE-01, BE-10 | — |
+| FE-11 | FE-01, BE-12 | — |
+| FE-12 | FE-01, BE-13 | — |
+| FE-13 | FE-01, BE-09 | — |
+| FE-14 | FE-01, FE-06, BE-14 | — |
+| FE-15 | FE-01, BE-02, BE-18 | — |
 
 ---
 
-## Part 7 -- The Spec Kit Workflow
+## 8. Cross-Cutting Standards
+
+Every individual specification MUST include compliance notes for the applicable X-specs below.
+X-spec compliance is a gate for implementation sign-off, not an afterthought.
+
+### X-03 Tenant Isolation (Every DB + BE Spec)
+
+- Every Prisma query on a domain table MUST include a `workspaceId` filter
+- No query may join across tenant boundaries
+- API middleware must extract and validate `workspaceId` from JWT on every request
+- Tests must assert that a resource belonging to Workspace A is not accessible from Workspace B
+
+### X-04 Financial Correctness (Every Financial Spec)
+
+- All money stored as `Decimal(14,2)` — no floats
+- All comparisons use `Decimal` comparison methods — no floating-point arithmetic
+- Rounding applied at display layer only (half-up)
+- Attribution math must be deterministic and reproducible from the `AttributionEvent` ledger
+- `src/core/attribution.ts`, `src/core/fees.ts`, `src/core/marginGuard.ts` — zero I/O, 100% unit-testable
+
+### X-05 AI Guardrails (Wasel + Any LLM Caller)
+
+- Cost cap: hard stop at `$0.05/conversation`; alert at `$0.04`; model downgrade before violating
+- Confidence tiers: HIGH (respond) / MEDIUM (respond with caveats) / LOW (hand off) / REFUSE
+- Grounding: Wasel may only reference catalog data from the current workspace
+- Prohibited: cost price disclosure to customer, hallucinated product details, margin data exposure
+- Every LLM call must produce a `LLMCall` record (model, tokens, latency, cost estimate)
+
+### X-06 Reliability (Every Webhook + Queue Spec)
+
+- Webhook idempotency: `(provider, event_id)` unique constraint on `WebhookEvent`
+- Replaying the same webhook must be a no-op (not a duplicate insert)
+- All queue jobs must have: retry count, backoff policy, DLQ destination
+- Long-running operations must update status atomically (no partial states on crash)
+
+---
+
+## 9. Spec Kit Workflow
+
+Every capability in this plan is implemented by driving it through the Spec Kit pipeline:
 
 ```
 MASTER PLAN (this document)
         |
-        v  select next unblocked spec
-/speckit-specify   -> create feature spec (scope, rules, API, acceptance criteria)
+        v  select next spec where ALL dependencies are COMPLETE
+/speckit-specify   -> Feature spec: scope, out-of-scope, SRS refs, rules, API, acceptance criteria
         |
-        v  review + approve spec
-/speckit-clarify   -> resolve any ambiguities before planning
-        |
-        v
-/speckit-plan      -> technical plan (how to implement the spec)
-        |
-        v  review + approve plan
-/speckit-tasks     -> atomic, dependency-ordered task list
+        v  review + approve spec with user
+/speckit-clarify   -> Resolve ambiguities before planning (optional but recommended)
         |
         v
-/speckit-implement -> execute tasks
+/speckit-plan      -> Technical plan: how to implement this spec
+        |
+        v  review + approve plan with user
+/speckit-tasks     -> Atomic, dependency-ordered task list
         |
         v
-/speckit-converge  -> verify unbuilt work, surface gaps
+/speckit-implement -> Execute tasks one by one
         |
-        v  update status in this document
-spec marked COMPLETE in master plan
+        v
+/speckit-converge  -> Verify no unbuilt work; surface gaps
+        |
+        v  update Status Tracking (Section 12)
+SPEC COMPLETE -> unlock downstream specs
 ```
 
-**Rules for spec authoring:**
-- Select the next spec where ALL dependencies are COMPLETE (not just started)
-- A spec with status "In Implementation" blocks downstream specs from starting
-- Do not create downstream specs for a V2 capability until the upstream MVP spec is COMPLETE
-- Always check X-03/X-04/X-05/X-06 compliance checklists during spec review
+### Required Spec Header Fields
+
+Every spec authored via `/speckit-specify` MUST declare:
+
+| Field | Value |
+|-------|-------|
+| Spec ID | `BE-xx` / `DB-xx` / `FE-xx` / `X-xx` |
+| Name | Human-readable name |
+| Phase | `MVP` / `V2 (Wave V2-x)` |
+| Status | `Draft` / `In Review` / `Approved` / `In Implementation` / `Complete` |
+| Depends on | Comma-separated spec IDs |
+| Blocks | Comma-separated spec IDs |
+| SRS references | `NEW-FR-xxx`, `RES-xx`, `BR-xxx` (space-separated) |
+| Constitution principles | e.g., `III, IV, VII` |
+
+### Spec Authoring Rules
+
+- A spec may only begin when ALL its declared dependencies are `Complete`
+- A spec in status `In Implementation` blocks all downstream specs from starting
+- Never author V2 specs for capabilities whose MVP prerequisites are not `Complete`
+- Always tick X-03/X-04/X-05/X-06 compliance checklists during spec review
+- OPEN-xx items found during spec authoring must be flagged and escalated — never resolved unilaterally
 
 ---
 
-## Part 8 -- Status Tracking
+## 10. Verification Checklist
+
+### Definition of Done (per spec)
+
+- [ ] All SRS requirement IDs listed in spec header are implemented and tested
+- [ ] X-03 tenant isolation: `workspaceId` filter on all Prisma queries; cross-tenant test fails correctly
+- [ ] X-04 financial correctness: all money ops use `Decimal(14,2)`; rounding only at display
+- [ ] X-05 AI guardrail: cost metered; confidence tier enforced; grounding verified (if AI)
+- [ ] X-06 reliability: idempotency key present; DLQ wired; retry policy configured (if queue/webhook)
+- [ ] Unit tests: ≥90% coverage on any `src/core/**` functions introduced
+- [ ] Integration test: happy path + key failure path covered
+- [ ] E2E test: user-facing flows covered (if FE spec)
+- [ ] No OPEN-xx items resolved — all flagged for stakeholder
+
+### MVP Pilot Readiness Gate
+
+- [ ] Wasel handles a live WhatsApp conversation autonomously without human intervention
+- [ ] `AttributionEvent` created for a paid order; `core/attribution.ts` produces correct MAR
+- [ ] MAR card shows correct value on owner dashboard in real time
+- [ ] Human takeover does not lose conversation state
+- [ ] AI cost stays under $0.05/conversation (metered across 10 test conversations)
+- [ ] Tenant A cannot read, write, or enumerate Tenant B's data (verified by X-03 audit)
+- [ ] Webhook replay produces no duplicate orders or attribution events
+- [ ] All Phase 0–3 X-spec compliance checklists pass
+- [ ] Railway + Vercel production deploy succeeds and smoke tests pass
+- [ ] Sentry receives a test error event; alerting fires correctly
+
+### Business Constraint Verification
+
+- [ ] `src/core/**` functions have zero `import` of database, HTTP, or queue modules
+- [ ] All `Decimal(14,2)` columns confirmed in Prisma schema; no `Float` on money fields
+- [ ] AI cost alert fires a log event when `$0.04` crossed in a conversation
+- [ ] Cost price is not returned in any API response visible to Agent or Customer roles
+- [ ] API routes begin with `/v1/` (no `/api/` prefix anywhere in route definitions)
+- [ ] 2FA UI is not built at MVP; invite UI is hidden until V2-A completes
+- [ ] V3 items (Munjiz, Rased, Murshid, Thaqib) do not appear in any MVP implementation
+
+---
+
+## 11. Files to Create
+
+### Backend (`apps/api/`)
+
+```
+apps/api/
+├── src/
+│   ├── app.ts                     # Express app, middleware, router
+│   ├── config.ts                  # Settings from env
+│   ├── core/
+│   │   ├── attribution.ts         # Deterministic MAR computation (pure, no I/O)
+│   │   ├── marginGuard.ts         # Deterministic margin band evaluation (pure, no I/O)
+│   │   ├── followUpPolicy.ts      # Aaed cadence rules: detection, intervals, caps (pure, no I/O) [V2-B]
+│   │   ├── fees.ts                # Success-fee computation (pure, no I/O) [V2-D]
+│   │   ├── billingPolicy.ts       # Subscription lifecycle, usage, overage policy (pure, no I/O) [V2-D]
+│   │   └── segmentation.ts        # Auto-segmentation logic (pure, no I/O) [V2-F]
+│   ├── lib/
+│   │   ├── audit.ts               # Append-only AuditLog writer
+│   │   ├── money.ts               # Decimal(14,2) helpers, rounding
+│   │   ├── idempotency.ts         # Redis-backed idempotency key lock
+│   │   └── rbac.ts                # Role check functions, capability resolution
+│   ├── middleware/
+│   │   ├── requestId.ts
+│   │   ├── tenantContext.ts
+│   │   ├── auth.ts                # JWT verify + workspace extract
+│   │   └── errorHandler.ts
+│   ├── modules/
+│   │   ├── auth/                  # BE-02: registration, login, JWT, workspace
+│   │   ├── catalog/               # BE-03: products, variants, inventory
+│   │   ├── conversations/         # BE-04: ingest, store, takeover
+│   │   ├── whatsapp/              # BE-05: webhook, send, status
+│   │   ├── wasel/                 # BE-06: AI sales closer
+│   │   ├── orders/                # BE-07: orders, invoices, payments
+│   │   ├── attribution/           # BE-08: AttributionEvent, MAR
+│   │   ├── billing/               # BE-09 [V2-D]
+│   │   ├── team/                  # BE-10 [V2-A]
+│   │   ├── instagram/             # BE-11 [V2-E]
+│   │   ├── aaed/                  # BE-12 [V2-B]
+│   │   ├── hafeth/                # BE-13 [V2-C]
+│   │   ├── crm/                   # BE-14 [V2-F]
+│   │   ├── salla-zid/             # BE-15 [V2-G]
+│   │   ├── media/                 # BE-16 [V2-H]
+│   │   ├── analytics/             # BE-17 [V2-I]
+│   │   ├── notifications/         # BE-18 [V2-E]
+│   │   └── shipping/              # BE-19 [V2-J]
+│   └── workers/
+│       ├── attribution.worker.ts
+│       ├── aiMetering.worker.ts
+│       └── notifications.worker.ts
+├── prisma/
+│   └── schema.prisma
+└── .env.example
+```
+
+### Frontend (`apps/web/`)
+
+```
+apps/web/
+├── app/
+│   ├── layout.tsx                 # Root layout (RTL, i18n provider)
+│   ├── page.tsx                   # Redirect: login or dashboard
+│   ├── (auth)/
+│   │   ├── login/page.tsx
+│   │   └── register/page.tsx
+│   └── (dashboard)/
+│       ├── layout.tsx             # Dashboard shell (nav, workspace selector)
+│       ├── page.tsx               # FE-03: Owner dashboard
+│       ├── inbox/                 # FE-05: Unified inbox
+│       ├── catalog/               # FE-04: Product catalog
+│       ├── orders/                # FE-07: Orders & payments
+│       ├── analytics/             # FE-08: Revenue analytics
+│       ├── integrations/          # FE-09: Integrations hub
+│       ├── settings/              # FE-15: Settings & admin
+│       ├── team/                  # FE-10 [V2-A]
+│       ├── customers/             # FE-06, FE-14 [V2-F]
+│       ├── aaed/                  # FE-11 [V2-B]
+│       ├── hafeth/                # FE-12 [V2-C]
+│       └── billing/               # FE-13 [V2-D]
+├── components/
+│   ├── ui/                        # shadcn/ui primitives
+│   ├── dashboard/                 # Dashboard widgets
+│   ├── inbox/                     # Conversation thread, composer
+│   ├── catalog/                   # Product forms, variant editor
+│   ├── orders/                    # Order list, order detail
+│   └── analytics/                 # MAR chart, metric cards
+├── lib/
+│   ├── api.ts                     # Typed API client
+│   ├── auth.ts                    # JWT + session management
+│   └── utils.ts
+├── hooks/
+│   ├── use-workspace.ts
+│   ├── use-conversations.ts
+│   ├── use-attribution.ts
+│   └── use-analytics.ts
+└── middleware.ts                  # Auth middleware (protect all dashboard routes)
+```
+
+### Prisma Migrations
+
+```
+prisma/migrations/
+├── 0001_core_tenancy.sql          # DB-01: Workspace, WorkspaceSettings
+├── 0002_audit_log.sql             # DB-14: AuditLog (append-only)
+├── 0003_auth_rbac.sql             # DB-02: User, Session, WorkspaceUser, WorkspaceRole
+├── 0004_catalog.sql               # DB-03: Product, ProductVariant, Category, InventoryLog
+├── 0005_conversations.sql         # DB-04: Customer, Conversation, Message, MessageAttachment
+├── 0006_integrations.sql          # DB-12: Integration, WebhookEvent
+├── 0007_orders.sql                # DB-05: Order, OrderItem, Invoice, Payment, Refund, PaymentPlan
+├── 0008_ai_execution.sql          # DB-06: AgentConfig, LLMCall, ToolExecution
+├── 0009_attribution.sql           # DB-07: AttributionEvent
+├── 0010_conversation_state.sql    # DB-15: ConversationState (1:1 with Conversation)
+├── 0011_billing.sql               # DB-08: SubscriptionPlan, Subscription [V2-D]
+├── 0012_team_rbac_conv_ops.sql    # DB-09: RBAC extensions + Label, AssignmentRule, EscalationRule [V2-A]
+├── 0013_aaed.sql                  # DB-10: FollowUpJob, FollowUpAttempt [V2-B]
+├── 0014_hafeth.sql                # DB-11: MarginRule, MarginDecision [V2-C]
+├── 0015_analytics.sql             # DB-13: MetricSnapshot, Report [V2-I]
+└── 0016_template_library.sql      # DB-12 extension: TemplateMessage [V2-E]
+```
+
+### Infrastructure & Config
+
+```
+/
+├── docker-compose.yml             # postgres:16, redis:7 for local dev
+├── pnpm-workspace.yaml
+├── turbo.json
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                 # typecheck → lint → test → build
+│       └── deploy.yml             # Railway (BE) + Vercel (FE) on main
+└── docs/
+    └── plans/
+        └── master-implementation-plan.md   # This file
+```
+
+---
+
+## 12. Status Tracking
 
 > Update this table as specs move through the pipeline.
-> Status values: Not started | In spec | Approved | In implementation | Complete
+> Status: `Not started` | `In spec` | `Approved` | `In implementation` | `Complete`
+
+*¹ X-00 (2026-08-24): all in-repo deliverables implemented and validated — monorepo boots (S1 PASS), data services persistent/resettable (S3/S4 PASS), CI gate green on `main` with red/skip/green semantics proven via PR, cache speedup 8%-of-cold (S7 PASS), secret hygiene clean (S8 PASS). Evidence: `specs/001-infrastructure-foundation/validation-log.md`. Remaining operator steps before flipping to `Complete`: branch protection on `main` (requires GitHub Pro/public repo), Railway + Vercel staging linking with auto-deploy (S6/T019), optional `TURBO_TOKEN`/`TURBO_TEAM` secrets. Exact steps: `docs/plans/x00-deploy-runbook.md`.
 
 | Spec | Name | Status | Phase |
-|---|---|---|---|
-| X-00 | Infrastructure | Not started | Phase 0 |
+|------|------|--------|-------|
+| X-00 | Infrastructure | In implementation *¹ | Phase 0 |
 | X-01 | Shared Contracts | Not started | Phase 0 |
 | X-02 | Testing Strategy | Not started | Phase 0 |
 | X-03 | Tenant Isolation | Not started | Phase 0 |
@@ -492,12 +810,13 @@ spec marked COMPLETE in master plan
 | DB-06 | AI Execution | Not started | MVP |
 | DB-07 | Attribution | Not started | MVP |
 | DB-08 | Billing | Not started | V2-D |
-| DB-09 | Team RBAC | Not started | V2-A |
+| DB-09 | Team, RBAC & Conversation Ops | Not started | V2-A |
 | DB-10 | Aaed | Not started | V2-B |
 | DB-11 | Hafeth | Not started | V2-C |
 | DB-12 | Integrations & Templates | Not started | MVP* |
-| DB-13 | Analytics | Not started | V2-I |
+| DB-13 | Analytics Snapshots | Not started | V2-I |
 | DB-14 | Audit Log | Not started | MVP |
+| DB-15 | Conversation AI State | Not started | MVP |
 | BE-01 | API Foundation | Not started | MVP |
 | BE-02 | Auth & Workspace | Not started | MVP |
 | BE-03 | Catalog | Not started | MVP |
@@ -524,38 +843,17 @@ spec marked COMPLETE in master plan
 | FE-05 | Unified Inbox | Not started | MVP |
 | FE-06 | Customer Profile | Not started | V2-F |
 | FE-07 | Orders & Payments | Not started | MVP |
-| FE-08 | Revenue Analytics | Not started | MVP (basic) / V2-I (full) |
+| FE-08 | Revenue Analytics | Not started | MVP / V2-I |
 | FE-09 | Integrations Hub | Not started | MVP / V2 |
 | FE-10 | Team & RBAC | Not started | V2-A |
 | FE-11 | Aaed Dashboard | Not started | V2-B |
 | FE-12 | Hafeth Margin Guard | Not started | V2-C |
 | FE-13 | Billing | Not started | V2-D |
 | FE-14 | CRM | Not started | V2-F |
-| FE-15 | Settings & Admin | Not started | MVP (basic) / V2 (full) |
+| FE-15 | Settings & Admin | Not started | MVP / V2 |
 
 ---
 
-## Part 9 -- Key Business Constraints
+*End of Master Implementation Plan*
 
-These are non-negotiable. Every downstream spec MUST cite and comply with relevant constraints.
-
-| Constraint | Source | Impact |
-|---|---|---|
-| src/core/** MUST be pure deterministic functions, no I/O, no LLM | NEW-NFR-003, Constitution VII | Attribution, margin, fees, billing must be 100% unit-testable |
-| Money = Decimal(14,2), half-up rounding at display only | NEW-FR-012, Constitution IV | All DB money columns, all comparisons |
-| AI cost cap: <$0.05/conversation, alert at $0.04 | NEW-BR-001 | LLMCall table aggregation, model downgrade before violating |
-| Tenant isolation at data layer (not just API) | Constitution III | Every Prisma query MUST include workspaceId filter |
-| Webhook idempotency: (provider, event_id) unique | NEW-FR-018 | WhatsApp, payment, shipping, Meta webhooks |
-| Attribution is deterministic, never AI-delegated | NEW-NFR-003, RES-01 | core/attribution.ts only |
-| Margin decisions: deterministic bands, not AI | RES-15, Constitution VII | core/marginGuard.ts only |
-| 2FA is V2 only | RES-10 | Do not build 2FA in MVP; stub it |
-| Team invites/RBAC is V2 only | RES-11 | MVP is owner-only; hide invite UI |
-| API prefix: api.waslah.ai/v1/ (no /api/ prefix) | SRS 04, Constitution X | All route definitions |
-| Cost price is confidential: Owner/Admin/Accountant only | NEW-SEC-001 | Catalog API, AI context assembly |
-| OPEN-xx items must not be resolved by implementation agents | AGENTS.md, Constitution XX | Flag and escalate to stakeholder |
-| V3-deferred items must not enter V2 implementation | Constitution XVI | Munjiz, Rased, Murshid, Thaqib, ERP, Voice AI |
-
----
-
-**Version**: 1.0 | **Authored**: 2026-08-19 | **Authority**: Waslah Constitution v1.0.0
-**Next action**: Begin Phase 0 -- run /speckit-specify for X-00 (Infrastructure Foundation)
+**Next action**: Begin Phase 0 — run `/speckit-specify` for `X-00` (Infrastructure Foundation)

@@ -40,7 +40,13 @@ Dashboard steps (one-time):
 
 ### Branch protection on `main` (T015) — contracts/ci-pipeline.md
 
-Settings → Branches → Add branch protection rule:
+> **Status: deferred (stakeholder decision 2026-08-24).** GitHub Free does not include branch
+> protection/rulesets for private repositories (API returns HTTP 403). Apply the settings below
+> after upgrading the account to GitHub Pro/Team or making the repository public. Until then,
+> FR-011's *technical* enforcement is inactive; the gate still runs and fails visibly on every
+> PR and push.
+
+Settings → Branches → Add branch protection rule (or equivalent **Ruleset**):
 
 | Rule | Value |
 |------|-------|
